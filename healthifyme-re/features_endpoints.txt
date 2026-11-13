@@ -1,0 +1,374 @@
+
+######## PAYMENTS (92)
+  GET    /api/v1/ai_diet_plan/preferences                                       
+  GET    /api/v1/ai_diet_plan_guide/current                                     
+  POST   /api/v1/ai_diet_plan_guide/generate                                    
+  GET    /api/v1/ai_diet_plan_guide/modes                                       
+  POST   /api/v1/ai_diet_plan_guide/save_mode                                   @Body GuideSelectionData$CurrentGuideType
+  GET    /api/v1/ai_diet_plan_guide/status                                      
+  POST   /api/v1/dashboard/diy/meal/ai-dietplan/edit/                           @Body p
+  POST   /api/v1/dashboard/diy/meal/ai-dietplan/edit/                           @Body o
+  GET    /api/v1/dashboard/diy/meal/ai-dietplan/edit/options                    @Query(request_id) String, @Query(meal_type) I, @Query(date) String
+  POST   /api/v1/dashboard/diy/meal/ai-dietplan/generate-and-store/             @Body j
+  GET    /api/v1/dashboard/diy/meal/ai-dietplan/get-by-request/                 @Query(request_id) String
+  GET    /api/v1/dashboard/diy/meal/ai-dietplan/latest-status-by-date/          @Query(date) String
+  POST   /api/v1/dashboard/diy/meal/ai-dietplan/meal/like-toggle/               @Body m
+  POST   /api/v1/dashboard/diy/meal/ai-dietplan/orchestrator/copy/              @Body d
+  POST   /api/v1/dashboard/diy/meal/ai-dietplan/orchestrator/generate-and-store @Body k
+  GET    /api/v1/dashboard/diy/meal/ai-dietplan/orchestrator/latest-status-by-d @Query(date) String
+  GET    /api/v1/dashboard/diy/meal/ai-dietplan/orchestrator/poll-status/       @Query(orchestrator_request_id) String
+  GET    /api/v1/dashboard/diy/meal/ai-dietplan/poll-status-by-request/         @Query(request_id) String
+  POST   /api/v1/dashboard/diy/meal/ai-dietplan/regenerate-and-store/           @Body t
+  POST   /api/v1/dashboard/diy/meal/ai-dietplan/save-edited/                    @Body u
+  GET    /api/v1/freemium/dashboard/lock                                        
+  GET    /api/v1/freemium/get_tag_and_lock_info                                 @Query(feature_types) List
+  GET    /api/v1/plans_tab/info/                                                @Query(type) String
+  GET    /api/v1/plans_tab/tab/                                                 
+  POST   /api/v1/pro-product/status/                                            @Body h
+  GET    /api/v1/pro_onboarding/configs                                         @Query(onboarding_keys) List
+  POST   /api/v1/pro_onboarding/done                                            @Body k
+  GET    collection/eligible/plan-info                                          
+  GET    collection/{plan_id}/ui-info                                           @Path(plan_id) I, @Query(key) String
+  POST   csm/invoice/send/                                                      @Body GetInvoicePostData
+  POST   dietplan/rework/                                                       @Body b
+  POST   dietplan/suggest_meal/                                                 @Body HealthySuggestionMealType
+  GET    dietplan/summary                                                       
+  GET    dietplan/user/{user_id}/note                                           @Path(user_id) I
+  GET    diy/dietplan/likes/counts                                              @Query(meal_type) I
+  GET    diy/dietplan/list                                                      @Query(date) String, @Query(force_refresh) Boolean
+  POST   diy/dietplan/meal/feedback                                             @Body List
+  GET    diy/dietplan/meals/liked                                               @Query(meal_type) I
+  GET    diy/dietplan/meals/options                                             @Query(meal_type) I, @Query(meal_pref) I, @Query(page) I
+  GET    diy/dietplan/meals/options                                             @Query(meal_type) I, @Query(food_id) [J, @Query(meal_pref) I, @Query(page) I
+  GET    diy/dietplan/meals/{meal_id}                                           @Path(meal_id) J
+  POST   diy/dietplan/user-meals/{user_meal_id}/feedback/                       @Path(user_meal_id) J, @Body a, @Query(require_like_counts) Integer
+  GET    diy/dietplan/user-meals/{user_meal_id}/meal/detail                     @Path(user_meal_id) J
+  GET    diy/plans                                                              @Query(ucb_enabled) Z
+  GET    diy/plans                                                              @Query(intent) String, @Query(ucb_enabled) Z
+  GET    diy/user/stats/renewal                                                 
+  POST   expert_connect/redeemcoupon/                                           @Body RedeemCoupon$RedeemCouponRequest
+  POST   expert_connect/redeemcoupon/                                           @Body RedeemCoupon$RedeemCouponRequest
+  GET    free_trial_quiz/                                                       
+  POST   freemium/activate                                                      
+  POST   freemium/extend/                                                       
+  GET    freemium/stats/                                                        @Query(feature_type) String
+  GET    intermittent_fasting/plans                                             
+  GET    juspay/initiate                                                        
+  GET    low_cost/plans                                                         @Query(ucb_enabled) Z
+  POST   payment/app/link/generate                                              @Body Map
+  POST   payment/app/link/generate                                              @Body Map
+  GET    payment/applicable/discounts                                           @Query(plan_id) I
+  POST   payment/charge                                                         @Body u
+  POST   payment/charge                                                         @Body StripePaymentPostBody
+  POST   payment/charge                                                         @Body c
+  POST   payment/charge                                                         @Body JuspayPostParam
+  GET    payment/checkout/params                                                @Query(plan_id) I
+  GET    payment/microplans/                                                    
+  POST   payment/params/pre-payment/generate                                    @Body b
+  POST   payment/params/pre-payment/generate                                    @Body JuspaySPPostBody
+  POST   payment/params/pre-subscription-payment/generate/                      @Body b
+  POST   payment/plan/request/                                                  @Body RequestPlanActivationData
+  GET    payment/plan/{plan_id}                                                 @Path(plan_id) I
+  POST   payment/plan/{plan_id}/notify/open                                     @Path(plan_id) I, @Body l
+  GET    payment/plans/recommended                                              
+  GET    payment/validate/discount_coupon/                                      @Query(coupon_code) String, @Query(plan_id) I, @Query(months) I
+  GET    payment_membership/manage                                              
+  POST   payment_membership/pause/                                              @Body a
+  GET    payment_membership/pause/flow                                          
+  GET    payment_membership/plan_pause_details                                  
+  POST   payment_membership/resume/                                             @Body j
+  GET    plan/yoga/day/{index}                                                  @Path(index) I
+  GET    plan/yoga/summary                                                      
+  GET    plans/all                                                              @Query(plan_id) Integer
+  POST   rating/plan/                                                           @Body PlanFeedbackPostBody
+  GET    shipment/pro-product/{id}                                              @Path(id) I, @Query(order_id) Integer
+  GET    smart-plan/food/category/next                                          @Query(page) Integer
+  GET    smart-plan/subscription/app                                            
+  POST   user/free_trial/activate                                               @Body FreeTrial
+  POST   user/free_trial/activate                                               @Body FreeTrial
+  POST   user/free_trial/eligible                                               @Body o
+  GET    user/free_trial/intro_config                                           
+  GET    user_plan/usage/                                                       
+  POST   user_plan/usage/                                                       @Body PlanUsage
+  GET    workout/plan/user/{user_id}/note/                                      @Path(user_id) I
+  GET    workout_plan/day/{day_value}/plan?video_format=webm                    @Path(day_value) I
+
+######## WORKOUT/YOGA/FASTING (43)
+  POST   activity-tracker/connect                                               @Body a
+  POST   activity-tracker/disconnect                                            @Body GenericDeviceDisconnectData
+  POST   activity-tracker/disconnect                                            @Body a
+  GET    /api/v1/next_gen/activity/insight                                      @Query(date) String, @Query(insight_type) String, @Query(insight_subtype) String
+  GET    /api/v1/next_gen/activity/state                                        @Query(insight_id) J
+  GET    /api/v1/next_gen/activity/state/info                                   @Query(date) String, @Query(insight_type) String, @Query(insight_subtype) String
+  GET    /api/v1/timeseries/steps/histogram                                     @Query(sync_token) J
+  POST   /api/v1/timeseries/steps/save-logs                                     @Body i0
+  POST   /api/v2/user/feature_activity_log/                                     @Body c
+  GET    config/settings/?key=workout_video_config                              
+  GET    intermittent_fasting/home                                              @Query(is_fasting) Z
+  GET    intermittent_fasting/plans                                             
+  GET    intermittent_fasting/settings                                          
+  GET    intermittent_fasting/trend                                             @Query(start_date) String, @Query(end_date) String
+  PUT    intermittent_fasting/user_plan                                         @Body c
+  PATCH  intermittent_fasting/user_plan                                         @Body c
+  POST   nps/activity/update                                                    @Body l
+  GET    plan/yoga/day/{index}                                                  @Path(index) I
+  GET    plan/yoga/summary                                                      
+  GET    ria_ctas/workout-set/config                                            @Query(workout_set_id) I
+  POST   user_activity/first/                                                   @Body UserActvityData
+  POST   user_sync/data?table_names=AggrWorkoutLog                              @Query(install_id) String, @Query(device_id) String, @Query(sync_mode) String, @Body a
+  GET    user_sync/data?table_names=RawWorkoutLog                               @Query(install_id) String, @Query(device_id) String
+  POST   user_sync/data?table_names=RawWorkoutLog                               @Query(install_id) String, @Query(device_id) String, @Query(sync_mode) String, @Body f
+  GET    user_sync/data?table_names=RawWorkoutLog&force_sync=true&sync_type=rev @Query(install_id) String, @Query(device_id) String
+  POST   users/me/workout_log/workoutlog_sync/                                  @Body j
+  GET    workout-sets                                                           
+  GET    workout-sets/categorized                                               
+  POST   workout-sets/change                                                    @Body e
+  GET    workout-sets/options                                                   @Query(workout_date) String, @Query(force_refresh) Boolean, @Query(future) Boolean
+  GET    workout-sets/questionnaire                                             
+  GET    workout-sets/recommended-categories                                    
+  POST   workout-sets/save-preference                                           @Body l
+  GET    workout-sets/user-pref/explainer                                       
+  GET    workout-sets/{workout_set_id}                                          @Path(workout_set_id) I
+  GET    workout/plan/user/{user_id}/note/                                      @Path(user_id) I
+  GET    workout_plan/day/{day_value}/plan?video_format=webm                    @Path(day_value) I
+  GET    workout_preference_client/user-preference                              
+  POST   workout_preference_client/user-preference                              @Body SaveUserPreferenceModel
+  GET    workout_preference_client/user-preference-questions                    
+  GET    workoutautocomplete/search                                             @Query(search_term) String, @Query(level) String, @Query(category) String
+  GET    workouts/data                                                          @Query(workout_db_id) J
+  GET    workouts/data/sync                                                     @QueryMap Map
+
+######## COACH/BOOKING/CALLS (101)
+  GET    amadeus/coach-handoff/questions/                                       
+  POST   amadeus/coach-handoff/questions/                                       @Body c
+  GET    amadeus/coach-handoff/questions/{q_id}                                 @Path(q_id) I
+  GET    /api/v1/expertconnect/insurance/vertical-video-player/                 
+  GET    /api/v1/external-coach/appointments                                    
+  GET    /api/v1/external-coach/appointments/cancel/                            @Query(appointment_id) J
+  POST   /api/v1/external-coach/appointments/cancel/                            @Body c
+  GET    /api/v1/external-coach/call_summary                                    @Query(id) J
+  GET    /api/v1/external-coach/slots                                           @Query(expert_id) I, @Query(consultation_id) String
+  POST   /api/v1/external-coach/slots/book                                      @Body g
+  POST   /api/v1/external-coach/slots/book                                      @Body b
+  GET    /api/v1/external-coach/tab                                             
+  POST   /api/v2/expert_connect/migrate-user                                    @Body a
+  GET    /api/v4/expert_connect/expert_selection/filters                        
+  POST   /api/v4/expert_connect/experts/list/eligible/                          @Body l
+  POST   /api/v6/referrals/expert-referral-url                                  @Body b
+  GET    booking/booking/info                                                   @Query(slot_id) I
+  POST   booking/consultation/call                                              @Body ArrayMap
+  GET    booking/free-user-booking-eligibility/                                 
+  POST   booking/multi_coach/book/                                              @Body g
+  GET    booking/multi_coach/booking/info                                       @Query(slot_key) String
+  GET    booking/multi_coach/info/                                              
+  POST   booking/multi_coach/reschedule/                                        @Body i
+  POST   booking/multi_coach/slots/all                                          @Body h
+  GET    booking/multi_coach/slots/me/                                          
+  GET    booking/preference/expert/{expert_id}                                  @Path(expert_id) I
+  POST   booking/preference/expert/{expert_id}                                  @Path(expert_id) I, @Body BookingCustomSlot
+  GET    booking/preference/expert/{expert_id}                                  @Path(expert_id) I
+  POST   booking/preference/expert/{expert_id}                                  @Path(expert_id) I, @Body BookingCustomSlot
+  GET    booking/preference/{expert_id}/                                        @Path(expert_id) String
+  POST   booking/preference/{expert_id}/                                        @Path(expert_id) String, @Body HashMap
+  GET    booking/preferred-day-time/                                            
+  POST   booking/real-time/book                                                 @Body a
+  GET    booking/real-time/book                                                 @Query(source) String
+  POST   booking/reschedule/{from_slot_id}/{to_slot_id}/                        @Path(from_slot_id) I, @Path(to_slot_id) I, @Body ReschedulePostDataWithoutSourceId
+  POST   booking/reschedule/{from_slot_id}/{to_slot_id}/                        @Path(from_slot_id) I, @Path(to_slot_id) I, @Body ReschedulePostData
+  GET    booking/slots/all/                                                     @Query(expert_username) String, @Query(source_id) Integer
+  POST   booking/slots/book                                                     @Body a
+  POST   booking/slots/book                                                     @Body c
+  POST   booking/slots/book/                                                    @Body BookSlotDataWithoutSourceId
+  POST   booking/slots/book/                                                    @Body BookSlotDataWithoutSourceId
+  POST   booking/slots/book/                                                    @Body BookSlotData
+  POST   booking/slots/book/guaranteed/                                         @Body BookSlotData
+  POST   booking/slots/book/guaranteed/                                         @Body BookSlotData
+  POST   booking/slots/book/guaranteed/                                         @Body BookSlotData
+  POST   booking/slots/book/guaranteed/                                         @Body a
+  GET    booking/slots/real-time/                                               @QueryMap Map, @Query(expert_type) List
+  POST   booking/slots/real-time/book/                                          @Body d
+  GET    coach/component/coach-group                                            
+  GET    coach/ex-pro-tab                                                       
+  GET    coach/tab                                                              
+  GET    coach/tab/                                                             
+  GET    coach/tab/                                                             
+  GET    config/settings/?key=workout_video_config                              
+  GET    doctor_consultation/my_doctor/                                         
+  GET    expert_connect/expert/info                                             @Query(expert_id) I
+  POST   expert_connect/experts/add/                                            @Body AssignExpertPostBody
+  GET    expert_connect/experts/availability                                    
+  GET    expert_connect/experts/bio/{expert_id}                                 @Path(expert_id) I
+  GET    expert_connect/experts/info                                            @Query(expert_usernames) List
+  GET    expert_connect/experts/list/all/synced/                                @Query(sync_token) J
+  GET    expert_connect/experts/list/allocated/                                 
+  GET    expert_connect/experts/list/allocated/                                 
+  GET    expert_connect/experts/list/allocated/                                 
+  GET    expert_connect/experts/list/allocated/                                 
+  GET    expert_connect/experts/list/by_source                                  @Query(source) String
+  GET    expert_connect/experts/list/by_source                                  @Query(source) String
+  GET    expert_connect/experts/list/eligible/                                  @Query(expert_type) I
+  GET    expert_connect/experts/list/eligible/                                  @Query(expert_type) Integer
+  GET    expert_connect/experts/list/eligible/                                  @Query(is_for_display) I
+  GET    expert_connect/experts/list/eligible/                                  @Query(expert_type) I, @Query(language_preferences) List, @QueryMap Map, @Query(is_migrati
+  GET    expert_connect/experts/list/free-consultation                          @QueryMap Map, @Query(expert_type) ArrayList
+  GET    expert_connect/experts/list/free-consultation                          @Query(pool_type) String
+  GET    expert_connect/experts/list/paid/consultation                          @Query(expert_id) Integer, @Query(expert_type) Integer, @Query(slot_info) Z
+  GET    expert_connect/experts/list/paid/consultation                          @Query(expert_type) I, @Query(config_key_names) [String, @Query(slot_info) Z
+  GET    expert_connect/list/migration_reason                                   
+  GET    expert_connect/recommend/free_consultation/                            @QueryMap HashMap
+  GET    expert_connect/recommend/whatsapp_consultation                         
+  POST   expert_connect/redeemcoupon/                                           @Body RedeemCoupon$RedeemCouponRequest
+  POST   expert_connect/redeemcoupon/                                           @Body RedeemCoupon$RedeemCouponRequest
+  POST   expert_connect/whatsapp/expert/selected                                @Body d
+  POST   groupchat/img/upload/                                                  @Part MultipartBody$Part
+  POST   groupchat/report/chat/                                                 @Body ReportChatData
+  PUT    groupchat/{group_id}/add_user_to_group/                                @Path(group_id) String, @Body AddMemberData
+  GET    groupchat/{group_id}/banner                                            @Path(group_id) String
+  POST   rating/event/no_call/                                                  @Body e
+  POST   rating/rate/expert/                                                    @Body g
+  POST   rating/rate/expert_message/                                            @Body MessageRatingPostBody
+  POST   sales/call-options/exit/user                                           @Body ColdSalesLead
+  GET    sales/call-options/slots/                                              @Query(timezone) String, @Query(ignore_eligibility) Z
+  POST   sales/call-options/slots/book/                                         @Body CallOptions$CallSlotPostFormat
+  GET    stream_chat/get-token                                                  
+  GET    unified_coach_chat/expert_story_detail/                                
+  GET    unified_coach_chat/get-channel                                         
+  GET    unified_coach_chat/ria-bubbles                                         
+  POST   unified_coach_chat/update_group_name                                   @Body b
+  GET    user/consultation/flow-info                                            @Query(source) String, @Query(pre_auth_key) String, @Query(returning_user_flow) String
+  GET    user/fallback/consultation-flow                                        @Query(source) String
+  GET    user/onboarding/real-time-calling-v3/info                              @Query(pre_auth_key) String, @Query(returning_user_flow) String
+  GET    user/welcome_back_booking_consultation                                 @Query(user_type) String
+  GET    workout_plan/day/{day_value}/plan?video_format=webm                    @Path(day_value) I
+
+######## AUTH/ONBOARDING (78)
+  POST   account/become/                                                        @Body j
+  POST   account/device/logout/                                                 @Body LogoutUserPostBody
+  GET    account/email/resend/                                                  
+  POST   account/facebook/login/                                                @Body b
+  GET    account/firebase/tokens/                                               
+  POST   account/firebase_login/                                                
+  POST   account/google/login/                                                  @Query(format) String, @Query(vc) I, @Body d
+  POST   account/login/                                                         @Query(vc) I, @Body e
+  POST   account/send/email_verification                                        @Body ChangeEmailPostData
+  POST   account/signup/                                                        @Query(vc) I, @Body m
+  POST   account/signup/                                                        @Query(vc) I, @Body m
+  GET    account/verified/                                                      
+  POST   accounts/password/reset/                                               @Field(email) String
+  POST   /api/v1/account/set-password/                                          @Body SetPasswordRequest
+  GET    /api/v1/pro_onboarding/configs                                         @Query(onboarding_keys) List
+  POST   /api/v1/pro_onboarding/done                                            @Body k
+  GET    /api/v1/question/flow/options/default-selected?question_type=38        
+  POST   /api/v3/otp/email/non-logged-in/send/app                               @Body k
+  POST   /api/v3/otp/sms/non-logged-in/send/app                                 @Query(phone_number) String, @Query(for_logged_in_user) I, @Body j
+  GET    app_config/overrides?is_login=true                                     
+  GET    auth-user/onboarding/flow-info                                         @Query(pre_auth_key) String, @Query(returning_user_flow) String
+  POST   challenges/{challenge_id}/register                                     @Path(challenge_id) String
+  GET    config/settings/?key=quizzer_infra                                     
+  POST   gcm/register/                                                          @Body j
+  GET    next_gen/onboarding/info                                               
+  GET    next_gen/onboarding/welcome-screen-config                              
+  GET    onboardings/                                                           @Query(onboarding_type) I
+  POST   onboardings/                                                           @Body k0
+  GET    onboardings/configs/?onboarding_keys=auto_snap_post_enable_v2          
+  GET    onboardings/configs/?onboarding_keys=auto_snap_v2                      
+  GET    onboardings/configs/?onboarding_keys=manual_snap_v2                    
+  POST   opt-out/account/delete                                                 
+  POST   otp/anonymous/verify                                                   @Body b
+  POST   otp/send                                                               @Body c
+  POST   otp/send                                                               @Body a
+  GET    otp/sms/send                                                           @Query(phone_number) String, @Query(for_logged_in_user) I, @Query(feature_name) String
+  POST   pre-signup-profile/me                                                  @Body j
+  POST   profile                                                                @Header(Authorization) String, @Body TrueProfile
+  GET    profile                                                                @Header(Authorization) String
+  PUT    profile/me                                                             @Body j
+  POST   profile/me/picture/set/                                                @Part MultipartBody$Part
+  GET    profile/me?view=plan                                                   
+  POST   profile_extras/me                                                      @Body j
+  GET    profile_extras/me                                                      
+  POST   profile_extras/me/pedometer/connect/                                   @Body ConnectedDevicePostData
+  POST   profile_extras/me/pedometer/disconnect                                 
+  GET    profile_public/{user_id}                                               @Path(user_id) String
+  GET    question/flow/initial_question                                         @Query(question_type) I
+  GET    question/flow/initial_question                                         @Query(question_type) I
+  GET    question/flow/initial_question                                         @Query(question_type) I
+  GET    question/flow/initial_question                                         @Query(question_type) I
+  POST   question/flow/submit_next                                              @Body FlowQuestion
+  POST   question/flow/submit_next                                              @Body PlanRecoQuestion
+  POST   question/flow/submit_next                                              @Body j
+  GET    question/flow/user_report                                              
+  GET    quizzer/                                                               @Query(question_type) I
+  GET    quizzer/                                                               @Query(question_type) I
+  GET    quizzer/                                                               @Query(question_type) I
+  GET    quizzer/                                                               @Query(question_type) I
+  POST   quizzer/answer                                                         @Body m
+  POST   quizzer/answer                                                         @Body g
+  POST   quizzer/answer                                                         @Body a
+  POST   quizzer/answer/bulk                                                    @Body List
+  GET    quizzer/answer/details                                                 @Query(question_type) I
+  GET    quizzer/answer/details                                                 @Query(question_type) I
+  GET    quizzer/answer/summary                                                 @Query(question_type) I
+  GET    quizzer/hash                                                           
+  GET    quizzer/hash                                                           
+  POST   quizzer/user/{user_id}/answer/save                                     @Path(user_id) I, @Body f
+  GET    quizzer/verbose/                                                       @Query(question_type) I
+  GET    stream_chat/get-token                                                  
+  POST   user/onboarding/analytics                                              @Body i
+  GET    user/onboarding/flow                                                   @Query(pre_auth_key) String, @Query(store_currency_code) String
+  GET    user/onboarding/flow-info                                              @Query(pre_auth_key) String, @Query(returning_user_flow) String
+  GET    user/onboarding/real-time-calling-v3/info                              @Query(pre_auth_key) String, @Query(returning_user_flow) String
+  GET    user/onboarding/welcome-back-info                                      @Query(user_type) String, @Query(variant) String
+  GET    user/onboarding/welcome-back-info                                      @Query(variant) String
+  GET    workout-sets/questionnaire                                             
+
+######## GAMIFICATION (50)
+  GET    /api/v1/user_paths/days/today                                          
+  POST   /api/v1/user_paths/goals/status                                        @Body b
+  POST   /api/v2/referral/                                                      @Body a
+  GET    /api/v6/referrals/details/                                             
+  POST   /api/v6/referrals/expert-referral-url                                  @Body b
+  GET    /api/v6/referrals/history                                              
+  GET    challenges/{challenge_id}                                              @Path(challenge_id) String
+  GET    challenges/{challenge_id}/progress                                     @Path(challenge_id) String
+  POST   challenges/{challenge_id}/register                                     @Path(challenge_id) String
+  POST   challenges/{challenge_id}/task/entry/submit                            @Path(challenge_id) String, @PartMap Map, @Part MultipartBody$Part
+  POST   corporate/challenge/join/                                              @Body RegisterCorporateChallengePostBody
+  GET    corporate/rewards/                                                     
+  POST   journey/goal/click                                                     @Body b
+  POST   journey/goal/click                                                     @Body b
+  POST   journey/goal/expire                                                    @Body a
+  POST   journey/goal/failure/feedback                                          @Body d
+  POST   journey/goal/failure/feedback                                          @Body d
+  GET    journey/goal/failure/options                                           
+  GET    journey/goal/failure/options                                           
+  POST   journey/goal/rejection/feedback                                        @Body f
+  GET    journey/goal/rejection/options                                         
+  POST   journey/start                                                          
+  GET    journey/user/goals                                                     
+  GET    lbd/snapshot/latest/                                                   @Query(challenge_id) J, @Query(activity_type) String
+  GET    leaderboard/challenges/                                                
+  GET    leaderboard/ranks/                                                     
+  POST   medical/challenge/join/                                                @Body a
+  POST   objectives/sync/                                                       @Query(format) String, @Body ObjectivesSyncData
+  GET    points/level/                                                          
+  POST   referral/                                                              @Body d
+  GET    referral/history                                                       @Query(offset) I, @Query(only_history_info) Z
+  POST   referral/redeem/                                                       @Body a
+  GET    referral/status/                                                       
+  GET    referral/validate/{referral_code}/                                     @Path(referral_code) String
+  GET    ria/journey/config                                                     @Query(tab) String
+  GET    streak/milestone/                                                      
+  GET    streaks/                                                               
+  POST   teams/                                                                 @Query(format) String, @Body TeamCreationPostData
+  GET    teams/config                                                           
+  DELETE teams/delete/                                                          @Query(team_id) String, @Query(format) String
+  GET    teams/incomplete_teams/list                                            @Query(format) String, @Query(challenge_id) I
+  POST   teams/invite_action/                                                   @Query(format) String, @Body TeamInvitaionResponsePostData
+  POST   teams/members/invite/                                                  @Query(format) String, @Body TeamInvitePostData
+  POST   teams/members/remove_member/                                           @Query(format) String, @Body TeamInvitePostData
+  POST   teams/members/request_action/                                          @Query(format) String, @Body ResponseRequestInvitePostData
+  POST   teams/request_to_join/                                                 @Query(format) String, @Body TeamId
+  GET    teams/search_by_email/                                                 @Query(format) String, @Query(email) String
+  GET    teams/{id}/                                                            @Path(id) String, @Query(format) String
+  GET    user/points                                                            
+  POST   users/points_log/sync/                                                 @Query(format) String, @Body PointsSyncData

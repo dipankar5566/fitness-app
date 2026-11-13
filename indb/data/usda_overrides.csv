@@ -1,0 +1,280 @@
+food_code,usda_description,match,note
+A001,"Amaranth grain, uncooked",exact,
+A003,"Millet, raw",close,bajra = pearl millet
+A005,"Sorghum grain",exact,jowar
+A006,"Corn grain, yellow",exact,
+A009,"Quinoa, uncooked",exact,
+A010,,none,ragi (finger millet) not in SR Legacy
+A011,,none,rice flakes (poha) not in SR Legacy
+A012,"Cereals ready-to-eat, QUAKER, QUAKER Puffed Rice",proxy,unfortified puffed rice
+A014,"Rice, white, long-grain, parboiled, unenriched, dry",close,
+A018,"Wheat flour, white, all-purpose, unenriched",exact,maida
+A019,"Wheat flour, whole-grain (Includes foods for USDA's Food Distribution Program)",exact,atta
+A022,"Semolina, unenriched",exact,
+A024,"Pasta, dry, unenriched",proxy,wheat vermicelli
+A501,,none,breakfast cereal clusters - brand specific
+A502,"Couscous, dry",exact,
+A503,"Corn flour, whole-grain, yellow",close,
+A504,"Chickpea flour (besan)",exact,
+A505,"Rice flour, white",exact,
+A507,"Pasta, dry, unenriched",exact,
+A508,"Cereals, oats, regular and quick, not fortified, dry",exact,
+A514,"Buckwheat groats, roasted, dry",close,
+B001,"Chickpeas (garbanzo beans, bengal gram), mature seeds, raw",close,chana dal (split)
+B002,"Chickpeas (garbanzo beans, bengal gram), mature seeds, raw",exact,
+B003,"Mungo beans, mature seeds, raw",close,urad dal (split)
+B004,"Mungo beans, mature seeds, raw",exact,
+B005,"Cowpeas, common (blackeyes, crowder, southern), mature seeds, raw",close,
+B010,"Mung beans, mature seeds, raw",close,moong dal (split)
+B011,"Mung beans, mature seeds, raw",exact,
+B012,,none,horse gram not in SR Legacy
+B013,"Lentils, pink or red, raw",close,masoor dal
+B015,"Lentils, raw",exact,
+B016,"Mothbeans, mature seeds, raw",exact,
+B020,"Beans, kidney, red, mature seeds, raw",exact,rajmah
+B021,"Pigeon peas (red gram), mature seeds, raw",close,arhar/toor dal (split)
+B025,"Soybeans, mature seeds, raw",exact,
+B500,"Chickpeas (garbanzo beans, bengal gram), mature seeds, raw",exact,
+B501,"Mung beans, mature seeds, sprouted, cooked, boiled, drained, without salt",exact,
+B503,"Soy flour, full-fat, raw",exact,
+B504,"Peanut butter, smooth style, with salt",exact,
+B505,"Peanuts, all types, dry-roasted, without salt",exact,
+B506,"Tofu, raw, regular, prepared with calcium sulfate",close,
+C004,"Amaranth leaves, raw",exact,
+C008,"Lambsquarters, raw",exact,bathua = Chenopodium album
+C015,"Cabbage, raw",exact,
+C020,,none,fenugreek (methi) leaves not in SR Legacy
+C025,"Lettuce, green leaf, raw",close,
+C026,"Mustard greens, raw",exact,
+C028,"Parsley, fresh",exact,
+C031,,none,radish leaves not in SR Legacy
+C033,"Spinach, raw",exact,
+C500,"Broccoli, raw",exact,
+C502,"Watercress, raw",exact,
+D002,"Bamboo shoots, raw",exact,
+D006,"Balsam-pear (bitter gourd), pods, raw",exact,karela
+D007,"Gourd, white-flowered (calabash), raw",exact,lauki
+D031,"Eggplant, raw",exact,
+D033,"Peppers, sweet, green, raw",exact,
+D034,"Peppers, sweet, red, raw",exact,
+D036,"Cauliflower, raw",exact,
+D037,"Celery, raw",exact,
+D042,"Corn, sweet, yellow, raw",proxy,baby corn
+D043,"Cucumber, with peel, raw",exact,
+D046,"Drumstick pods, raw",exact,
+D050,"Beans, snap, green, raw",exact,
+D056,"Okra, raw",exact,
+D057,"Mangos, raw",proxy,green mango (ripe values)
+D058,"Onions, spring or scallions (includes tops and bulb), raw",close,onion stalk
+D059,"Papayas, raw",proxy,raw papaya (ripe values)
+D061,"Peas, green, raw",exact,
+D066,"Pumpkin, raw",exact,
+D073,,none,tinda not in SR Legacy
+D074,"Tomatoes, green, raw",exact,
+D075,"Tomatoes, red, ripe, raw, year round average",exact,
+D091,,none,dried lotus stem not in SR Legacy
+D500,"Kale, raw",exact,
+D501,"Onions, spring or scallions (includes tops and bulb), raw",close,
+D502,"Tomatoes, red, ripe, raw, year round average",close,cherry tomatoes
+D503,"Corn, sweet, yellow, raw",exact,
+D504,"Olives, pickled, canned or bottled, green",exact,
+D505,"Pickles, cucumber, dill or kosher dill",close,gherkins
+D506,"Pickle relish, sweet",close,
+D508,"Broadbeans, immature seeds, raw",exact,
+E001,"Apples, raw, with skin",exact,
+E005,"Apricots, dried, sulfured, uncooked",exact,
+E006,"Apricots, dried, sulfured, uncooked",proxy,processed apricot
+E009,"Bananas, raw",exact,
+E014,"Cherries, sour, red, raw",exact,
+E015,"Currants, european black, raw",exact,
+E017,"Dates, deglet noor",close,
+E019,"Dates, deglet noor",close,
+E022,"Grapes, red or green (European type, such as Thompson seedless), raw",close,
+E023,"Grapes, red or green (European type, such as Thompson seedless), raw",close,
+E028,"Guavas, common, raw",exact,
+E030,"Jackfruit, raw",exact,
+E033,"Lemon juice, raw",exact,
+E034,,none,sweet lime (mosambi) not in SR Legacy
+E035,"Litchis, raw",exact,
+E036,"Mangos, raw",exact,
+E047,"Oranges, raw, all commercial varieties",close,
+E050,"Peaches, yellow, raw",exact,
+E051,"Pears, raw",exact,
+E053,"Pineapple, raw, all varieties",exact,
+E054,"Plums, raw",exact,
+E055,"Pomegranates, raw",exact,
+E057,"Raisins, dark, seedless",close,
+E062,"Carambola, (starfruit), raw",exact,
+E063,"Strawberries, raw",exact,
+E064,"Tamarinds, raw",exact,
+E067,,none,wood apple not in SR Legacy
+E500,"Blueberries, raw",exact,
+E501,"Cranberries, raw",exact,
+E502,"Kiwifruit, green, raw",exact,
+E503,"Bananas, raw",exact,
+E504,"Acerola, (west indian cherry), raw",exact,
+E505,"Currants, red and white, raw",exact,
+E506,"Raisins, golden, seedless",exact,sultanas
+E507,,none,amla not in SR Legacy
+E509,"Pears, canned, juice pack, solids and liquids",exact,
+E511,"Maraschino cherries, canned, drained",proxy,glace cherries
+E516,"Fruit cocktail, (peach and pineapple and pear and grape and cherry), canned, heavy syrup, solids and liquids",exact,
+E518,"Orange juice, raw",exact,
+E520,"Lemons, raw, without peel",exact,
+F001,"Beets, raw",exact,
+F002,"Carrots, raw",exact,
+F004,"Taro, raw",exact,
+F005,"Lotus root, raw",exact,
+F006,"Potatoes, flesh and skin, raw",exact,
+F009,"Radishes, raw",exact,
+F010,"Radishes, oriental, raw",exact,
+F013,"Sweet potato, raw, unprepared",exact,
+F018,"Yam, raw",proxy,elephant foot yam (Amorphophallus)
+F500,"Beets, raw",exact,
+F501,"Turnips, raw",exact,
+G008,"Peppers, hot chili, green, raw",exact,
+G009,"Coriander (cilantro) leaves, raw",exact,
+G010,,none,curry leaves not in SR Legacy
+G012,"Garlic, raw",exact,
+G014,"Ginger root, raw",exact,
+G016,"Spearmint, fresh",exact,
+G017,"Onions, raw",exact,
+G019,,none,asafoetida not in SR Legacy
+G020,"Spices, cardamom",exact,
+G021,"Spices, cardamom",proxy,black cardamom
+G022,"Peppers, hot chili, red, raw",exact,
+G023,"Spices, cloves, ground",exact,
+G024,"Spices, coriander seed",exact,
+G025,"Spices, cumin seed",exact,
+G026,"Spices, fenugreek seed",exact,
+G027,"Spices, mace, ground",exact,
+G028,"Spices, nutmeg, ground",exact,
+G031,"Spices, pepper, black",exact,
+G032,"Spices, poppy seed",exact,
+G033,"Spices, turmeric, ground",exact,
+G509,"Seaweed, agar, dried",exact,
+G510,"Spices, fennel seed",exact,
+G511,"Spices, basil, dried",exact,
+G512,"Spices, bay leaf",exact,
+G513,"Seeds, sesame seeds, whole, dried",exact,
+G515,"Spices, curry powder",proxy,mixed curry spices
+G516,"Spices, chili powder",exact,
+G517,"Sauce, ready-to-serve, pepper or hot",close,
+G518,"Spices, cinnamon, ground",exact,
+G520,"Spices, curry powder",exact,
+G521,,none,mixed dried herbs - no single USDA item
+G523,,none,garam masala not in SR Legacy
+G524,"Spices, garlic powder",exact,
+G525,"Spices, rosemary, dried",exact,
+G526,"Spices, oregano, dried",exact,
+G527,"Spices, pepper, white",exact,
+G528,"Salt, table",exact,
+G529,"Spices, saffron",exact,
+G531,"Spices, thyme, dried",exact,
+G532,"Vinegar, distilled",exact,
+G533,"Spices, mustard seed, ground",exact,
+G534,"Yeast extract spread",exact,
+G545,"Spices, paprika",exact,
+G546,"Shallots, raw",exact,
+G547,"Onions, spring or scallions (includes tops and bulb), raw",exact,
+G554,"Spices, ginger, ground",exact,
+H001,"Nuts, almonds",exact,
+H005,"Nuts, cashew nuts, raw",exact,
+H006,"Nuts, coconut meat, dried (desiccated), not sweetened",exact,
+H007,"Nuts, coconut meat, raw",exact,
+H011,"Seeds, sesame seeds, whole, dried",exact,
+H012,"Peanuts, all types, raw",exact,
+H013,"Spices, mustard seed, ground",proxy,whole mustard seeds
+H017,"Nuts, pine nuts, dried",exact,
+H018,"Nuts, pistachio nuts, raw",exact,
+H020,"Seeds, sunflower seed kernels, dried",exact,
+H021,"Nuts, walnuts, english",exact,
+H500,"Seeds, watermelon seed kernels, dried",proxy,melon seeds
+H501,"Nuts, coconut milk, raw (liquid expressed from grated meat and water)",exact,
+H502,"Nuts, hazelnuts or filberts",exact,
+I001,"Sugars, brown",proxy,jaggery
+I501,"Ice creams, vanilla",exact,
+I502,"Sugars, granulated",exact,
+I503,"Sugars, brown",exact,
+I504,"Sugars, powdered",exact,
+I505,"Syrups, corn, dark",exact,
+I507,"Honey",exact,
+I508,"Tapioca, pearl, dry",proxy,sago
+I509,"Chocolate, dark, 45- 59% cacao solids",close,plain chocolate
+J001,"Mushrooms, white, raw",exact,
+K500,"Leavening agents, baking powder, double-acting, sodium aluminum sulfate",exact,
+K501,"Leavening agents, baking soda",exact,
+K502,"Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof",exact,
+K503,,none,custard powder not in SR Legacy
+K504,"Gelatins, dry powder, unsweetened",exact,
+K505,"Beverages, water, tap, drinking",close,distilled water
+K506,"Soup, chicken broth or bouillon, dry",close,stock cubes
+K507,,none,vegetable stock cubes not in SR Legacy
+L002,"Milk, whole, 3.25% milkfat, with added vitamin D",exact,
+L003,,none,paneer not in SR Legacy (cottage cheese is not equivalent)
+L004,,none,khoa not in SR Legacy
+L500,"Cheese, cheddar (Includes foods for USDA's Food Distribution Program)",exact,
+L502,"Cheese, cottage, creamed, large or small curd",exact,
+L503,"Cheese, mozzarella, whole milk",exact,
+L505,"Cheese, pasteurized process, American, without added vitamin D",close,
+L506,"Cheese, feta",exact,
+L507,"Salad dressing, mayonnaise, regular",exact,
+L508,"Milk, canned, condensed, sweetened",exact,
+L509,"Milk, evaporated, 2% fat",close,
+L510,"Milk, dry, nonfat, instant, with added vitamin A and vitamin D",exact,
+L511,"Cheese, ricotta, whole milk",exact,
+L512,"Cream, fluid, heavy whipping",exact,
+L519,"Cream, fluid, light (coffee cream or table cream)",exact,
+L520,"Yogurt, plain, whole milk",exact,
+M001,"Egg, whole, raw, fresh",exact,
+M002,"Egg, white, raw, fresh",exact,
+M003,"Egg, yolk, raw, fresh",exact,
+N003,"Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",exact,
+N500,"Chicken, broilers or fryers, meat and skin, raw",exact,
+O064,"Game meat, goat, raw",close,Indian mutton = goat
+O500,"Pork, cured, bacon, unprepared",exact,
+O501,"Ham, sliced, regular (approximately 11% fat)",close,
+O502,"Lamb, ground, raw",exact,
+O503,"Salami, Italian, pork",exact,
+O504,"Pork sausage, link/patty, unprepared",close,
+P034,"Fish, mackerel, Pacific and jack, mixed species, raw",proxy,Indian mackerel
+P057,"Fish, butterfish, raw",proxy,pomfret (same family)
+Q007,"Crustaceans, shrimp, raw",close,
+S006,"Fish, carp, raw",proxy,rohu is a carp
+T500,"Butter, salted",exact,
+T501,"Butter, without salt",exact,
+T502,"Oil, olive, salad or cooking",exact,
+T506,"Butter oil, anhydrous",exact,ghee
+T507,"Oil, coconut",exact,
+T508,"Oil, sunflower, linoleic",close,
+T509,"Oil, sesame, salad or cooking",exact,
+U500,,none,digestive biscuits not in SR Legacy
+U501,"Bread, whole-wheat, commercially prepared",exact,
+U502,"Bread, whole-wheat, commercially prepared, toasted",exact,
+U505,"Leavening agents, cream of tartar",exact,
+U509,"Ice cream cones, cake or wafer-type",exact,
+U511,"Bread, white, commercially prepared (includes soft bread crumbs)",exact,
+V500,"Apple juice, canned or bottled, unsweetened, without added ascorbic acid",exact,
+V501,"Cocoa, dry powder, unsweetened",exact,
+V502,"Beverages, coffee, instant, regular, powder",exact,
+V503,"Beverages, carbonated, cola, regular",exact,
+V504,"Beverages, chocolate-flavor beverage mix for milk, powder, with added nutrients",close,drinking chocolate
+V505,,none,energy drink - brand specific
+V508,,none,fruit squash - no USDA equivalent
+V509,"Pineapple juice, canned or bottled, unsweetened, without added ascorbic acid",exact,
+V510,"Beverages, tea, black, brewed, prepared with tap water",exact,
+V511,"Beverages, tea, green, brewed, regular",exact,
+W501,"Gelatin desserts, dry mix, prepared with water",exact,jelly
+W502,"Marmalade, orange",exact,
+X500,,none,Indian cook-in sauces - too varied
+X501,"Soy sauce made from soy and wheat (shoyu)",exact,
+X503,"Catsup",exact,
+X504,"Tomato products, canned, puree, without salt added",exact,
+X505,"Tomato products, canned, sauce",proxy,homemade tomato sauce
+X506,"Sauce, homemade, white, medium",exact,
+X507,"Sauce, worcestershire",exact,
+X508,,none,sour-cream dips - too varied
+X509,"Salad dressing, thousand island, commercial, regular",exact,
+X510,"Salad dressing, french dressing, commercial, regular",exact,
+X512,,none,mint sauce not in SR Legacy
+X513,,none,pizza base not in SR Legacy

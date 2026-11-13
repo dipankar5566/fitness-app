@@ -1,0 +1,352 @@
+
+### Snap upload resp  [Lyx0/f0;]
+  uuid: String
+  image_ids: Ljava/util/List<Long>;
+  is_food_detected: Boolean
+  is_food_processed: Boolean
+
+### Snap v2 upload resp  [Lyx0/g0;]
+  is_food_detected: Boolean
+  is_food_processed: Boolean
+  images_info: Ljava/util/List<g0$a>;
+      image_id: J
+      uuid: String
+      image_hash: String
+      status: I
+      error: String
+      retry: Z
+
+### Snap tracked foods  [Lyx0/n0;]
+  data: Ljava/util/List<n0$a>;
+      foods: Ljava/util/List<n0$b>;
+          calories: D
+          food_id: J
+          food_name_id: J
+          carbs: D
+          fats: D
+          fibre: D
+          protein: D
+          log_id: J
+          measure_name: String
+          name: String
+          quantity: D
+          suggested_foods: Ljava/util/List<n0$j>;
+          food_items: Ljava/util/List<n0$c>;
+          suggested_foods_v2: Ljava/util/List<n0$k>;
+      image_id: J
+      image_timestamp: J
+      image_source: I
+      image_url: String
+      meal_type: String
+      show_expanded_card: Boolean
+      score_info: n0$h
+          cta: String
+          icon_url: String
+          message: String
+      is_custom_food: Boolean
+      ai_fix_food_example: String
+  title: String
+  show_rating_popup: Z
+  bottom_banner: d
+      bg_colour: String
+      cta_url: String
+      header: String
+      icon_json_file_name: String
+      icon_url: String
+      subtext: String
+      text_colour: String
+      type: String
+      cta_text: String
+  post_review_deeplink: String
+  pending_images_data: n0$f
+      footer: n0$d
+          primary_cta: n0$g
+          secondary_cta: n0$i
+      header_card: n0$e
+          icon_url: String
+          text: String
+          title: String
+      image_cards: Ljava/util/List<n0$m>;
+          image_id: J
+          image_url: String
+          text: String
+          title: String
+  cta_title: String
+  is_insight_v2_enabled: Z
+
+### Snap detect_foods  [Lyx0/k;]
+  response: Ljava/util/List<k$a>;
+      category_id: Ljava/util/List<String>;
+      food_id: String
+      food_name: String
+      source: String
+      type: String
+  category_info: Ljava/util/List<b0>;
+      category_name: String
+      category_id: String
+
+### Snap segmentation  [Lyx0/n;]
+  image_id: I
+  segmented_foods_bboxes: Ljava/util/List<n$a>;
+      x1: D
+      y1: D
+      x2: D
+      y2: D
+
+### Snap model (on-device)  [Lyx0/j0;]
+  android_url: String
+  version: I
+  confidence_threshold: F
+  checksum_sha256_android: String
+
+### Snap insights  [Lfz0/c;]
+  data: c$d
+      bottom_card_config: c$a
+          cta_deeplink: String
+          cta_text: String
+      cards: Ljava/util/List<c$b>;
+          card_config: l
+          card_type: String
+
+### Snap mark reviewed body  [Lyx0/t;]
+  image_id: J
+  updates: Ljava/util/List<t$b>;
+      food_log_id: J
+      updated_food_id: J
+      updated_quantity: D
+      updated_measure_name: String
+  image_updates: t$a
+      meal_type: String
+
+### Food search item  [Lrj0/e;]
+  food_id: J
+  food_name: String
+  food_name_id: Long
+
+### Food details  [Lrj0/b;]
+  food: a
+      food_id: J
+      food_name: String
+      brand_name: String
+      canonical_food_name: String
+      is_cachable: Boolean
+      calorie: Double
+      proteins: Double
+      carbs: Double
+      fats: Double
+      fibre: Double
+      food_category: String
+      food_rank: Integer
+      food_relevance_breakfast: Double
+      food_relevance_dinner: Double
+      food_relevance_lunch: Double
+      food_relevance_snack: Double
+      food_rrr_score: Double
+      food_image_url: String
+      tag_info: String
+      default_measure_id: Long
+  food_measures: Ljava/util/List<f>;
+      food_id: J
+      measure_id: J
+      measure_name: String
+      common_measure_name: String
+      measure_weight: F
+      metric_unit: String
+      measure_rank: Integer
+      measure_volume: Float
+      calorie: F
+      proteins: F
+      carbs: F
+      fats: F
+      fibre: F
+      food_type: Integer
+      micronutrient_details: c
+          calcium: Double
+          iron: Double
+          zinc: Double
+          magnesium: Double
+          cholesterol: Double
+      default_quantity: Float
+  micro_nutrients_lock_info: d
+      is_locked: Z
+      title_text: String
+      cta_text: String
+      cta_url: String
+
+### Food measures relevant  [Lcom/healthifyme/basic/foodtrack/model/FoodDetailsResponse;]
+  measures: Ljava/util/List<FoodMeasure>;
+      calories: D
+      carbohydrates: D
+      fat: D
+      fibre: D
+      protein: D
+      measure_id: J
+      measure_name: String
+      measure_weight: D
+      quantity: D
+  meta: FoodMeta
+      food_category: String
+      food_id: J
+      food_name: String
+      image_url: String
+
+### Next-food predictor body  [Lcom/healthifyme/basic/models/NextFoodApiPostBody;]
+  meal_type: String
+  tracked_food_ids: Ljava/util/List<Long>;
+
+### Next-food predictor resp  [Lcom/healthifyme/basic/models/NextFoodApiResponse;]
+  next_foods: Ljava/util/List<NextFoodApiResponse$NextFood>;
+      id: J
+      measure_id: J
+      name: String
+      quantity: D
+
+### Food log lookback  [Lcom/healthifyme/basic/models/FoodLogLookBackResponse;]
+  food_logs: g
+  lookback_end_date: String
+  lookback_start_date: String
+
+### Custom meal  [Lcom/healthifyme/basic/custom_meals/data/model/Meal;]
+  foods: Ljava/util/List<+Food>;
+      food_id: J
+      food_name_id: J
+      measure_id: J
+      quantity: D
+      id: J
+      food_name: String
+
+### AI diet plan generate body  [Lbj/j;]
+  start_date: String
+
+### AI diet orchestrator body  [Lbj/k;]
+  dates: Ljava/util/List<String>;
+
+### AI diet orchestrator status  [Lbj/v;]
+  status: String
+  orchestrator_request_id: String
+  start_date: String
+  end_date: String
+  day_statuses: Ljava/util/Map<Stringg>;
+      request_id: String
+      status: String
+
+### AI diet plan by request  [Lbj/e;]
+  custom_config_meal_cards: e$d
+      breakfast: Ljava/util/List<String>;
+      morning_snacks: Ljava/util/List<String>;
+      lunch: Ljava/util/List<String>;
+      evening_snacks: Ljava/util/List<String>;
+      dinner: Ljava/util/List<String>;
+      general: Ljava/util/List<String>;
+  request_id: String
+  start_date: String
+  dietplan: Ljava/util/Map<Stringe$b>;
+      breakfast: e$c
+          foods: Ljava/util/List<e$a>;
+          summary: String
+          tip: e$e
+          total_calories: Float
+          total_carbs: Float
+          total_fat: Float
+          total_fibre: Float
+          total_protein: Float
+          liked: Boolean
+          tags: Ljava/util/List<String>;
+      morning_snacks: e$c
+      lunch: e$c
+      evening_snacks: e$c
+      dinner: e$c
+      total_calories: Float
+
+### AI diet status by date  [Lbj/g;]
+  request_id: String
+  status: String
+
+### AI diet edit options  [Lbj/q;]
+  date: String
+  limit_reached: Z
+  meal_type: I
+  options: Ljava/util/List<q$b>;
+      options: Ljava/util/List<q$a>;
+          idx: I
+          option_id: String
+          foods: Ljava/util/List<e$a>;
+          summary: String
+          total_calories: F
+          tags: Ljava/util/List<String>;
+      reason_id: String
+      reason: String
+  request_id: String
+
+### AI diet preferences  [Lcom/healthify/ai_diet_plan/data/model/PreferencesData;]  (no serialized fields — wrapper/RequestBody)
+
+### DIY diet plan meals  [Lcom/healthifyme/basic/diy/data/model/DiyDietPlanMeals;]
+  meals: Ljava/util/List<DiyDietPlanMeals$Meal>;
+      items: Ljava/util/List<DiyDietPlanMeals$Item>;
+          calories: D
+          food_id: J
+          food_name: String
+          measure_id: J
+          measure_name: String
+          quantity: DiyDietPlanMeals$Quantity
+          food_preference: I
+          recipe: Z
+          food_tags: Ljava/util/List<FoodTag>;
+          change_food_prompt: String
+      meal_id: J
+      meal_message: String
+      meal_pref: I
+      meal_type: I
+      accepted: Z
+      carbs: D
+      fats: D
+      fibre: D
+      protein: D
+      legend_meal_info: LegendMealInfo
+          description: String
+          image_url: String
+          title: String
+      header_info: HeaderInfo
+          title: String
+          icon: String
+          cta_text: String
+      is_ria_generated: Z
+      change_meal_prompt: String
+  feedback_threshold_approved: Integer
+  feedback_threshold_unapproved: Integer
+  min_accept_approved: Integer
+  min_accept_unapproved: Integer
+  status: String
+  wait_state_config: WaitStateConfig
+      cta_list: Ljava/util/List<DietPlanCta>;
+          deeplink: String
+          icon_url: String
+          text: String
+      subtitle: String
+      title: String
+      wait_icon_url: String
+
+### Meal budgets  [Lcom/healthifyme/mealtype/data/model/CalorieBudgetEditorResponse;]
+  calorie_budgets_by_meal: Ljava/util/List<CalorieBudgetItem>;
+      calories: Integer
+      calories_perc: Double
+      meal_type: String
+      display_name: String
+      meal_type_int: I
+  lock_state_info: LockStateInfo
+      lock_state_cta_text: String
+      lock_state_cta_url: String
+      features: Ljava/util/List<Features>;
+          icon_url: String
+          name: String
+      subtext: String
+      header: String
+  edit_by_calories: Z
+  should_show_lock_state: Z
+  subtext: String
+  header: String
+  title: String
+  daily_calorie_budget: DailyCalorieBudgetTotal
+      text: String
+      calories: String
+      calories_perc: String
