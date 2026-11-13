@@ -1,0 +1,17 @@
+node_modules/
+.turbo/
+dist/
+build/
+.expo/
+.expo-shared/
+*.log
+.env
+.env.local
+.DS_Store
+coverage/
+indb/data/raw/
+*.sqlite
+*.db
+.vscode/
+android/
+ios/
