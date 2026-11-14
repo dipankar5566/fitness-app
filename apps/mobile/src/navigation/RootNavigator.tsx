@@ -2,9 +2,11 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GuestLoadingScreen } from "../screens/GuestLoadingScreen";
 import { HomeScreen } from "../screens/HomeScreen";
+import { OnboardingScreen } from "../screens/OnboardingScreen";
 
 export type RootStackParamList = {
   GuestLoading: undefined;
+  Onboarding: { accountId: string };
   Home: { accountId: string };
 };
 
@@ -18,6 +20,11 @@ export function RootNavigator() {
           name="GuestLoading"
           component={GuestLoadingScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Onboarding"
+          component={OnboardingScreen}
+          options={{ title: "Set up your targets" }}
         />
         <Stack.Screen name="Home" component={HomeScreen} options={{ title: "Fitness" }} />
       </Stack.Navigator>

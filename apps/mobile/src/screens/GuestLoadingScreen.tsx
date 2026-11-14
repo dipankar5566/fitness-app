@@ -2,7 +2,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Button, StyleSheet, Text, View } from "react-native";
 import { identifyGuest, trackEvent } from "../lib/analytics";
-import { createGuestAccount } from "../lib/api";
+import { createGuestAccount, getProfile } from "../lib/api";
 import { loadGuestSession, saveGuestSession } from "../lib/auth-storage";
 import { API_URL } from "../lib/env";
 import type { RootStackParamList } from "../navigation/RootNavigator";
@@ -12,6 +12,18 @@ type Props = NativeStackScreenProps<RootStackParamList, "GuestLoading">;
 export function GuestLoadingScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
 
+  const routeToNextScreen = useCallback(
+    async (accountId: string, accessToken: string) => {
+      const { profile } = await getProfile(API_URL, accessToken);
+      if (profile) {
+        navigation.replace("Home", { accountId });
+      } else {
+        navigation.replace("Onboarding", { accountId });
+      }
+    },
+    [navigation],
+  );
+
   const establishSession = useCallback(() => {
     setError(null);
     void (async () => {
@@ -20,20 +32,20 @@ export function GuestLoadingScreen({ navigation }: Props) {
         if (existing) {
           identifyGuest(existing.accountId);
           trackEvent("guest_session_resumed");
-          navigation.replace("Home", { accountId: existing.accountId });
+          await routeToNextScreen(existing.accountId, existing.accessToken);
           return;
         }
         const session = await createGuestAccount(API_URL);
         await saveGuestSession(session);
         identifyGuest(session.accountId);
         trackEvent("guest_session_created");
-        navigation.replace("Home", { accountId: session.accountId });
+        await routeToNextScreen(session.accountId, session.accessToken);
       } catch {
         trackEvent("guest_session_failed");
         setError("Could not reach the server. Check your connection and try again.");
       }
     })();
-  }, [navigation]);
+  }, [routeToNextScreen]);
 
   useEffect(() => {
     establishSession();
