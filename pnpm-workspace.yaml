@@ -5,4 +5,5 @@ packages:
 allowBuilds:
   '@nestjs/core': true
   '@sentry/cli': true
+  '@swc/core': true
   esbuild: true

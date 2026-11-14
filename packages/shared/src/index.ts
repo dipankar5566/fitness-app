@@ -1,2 +1,2 @@
-export * from "./targets";
-export * from "./schemas";
+export * from "./targets.ts";
+export * from "./schemas.ts";
