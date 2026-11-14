@@ -6,18 +6,20 @@ without re-reading those three docs every time.
 
 ## Current status (read this first)
 
-**M1 (Foundations) is mostly done.** Verified end-to-end against the real local Postgres `indb`
+**M1 (Foundations) is complete.** Verified end-to-end against the real local Postgres `indb`
 database: server boots, `POST /auth/guest` creates a real account row, `GET /food/search?q=idli`
 returns real INDB recipe matches. `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass at the repo
 root. CI workflow exists (`.github/workflows/ci.yml`).
 
-**Still open in M1** (do these next, in this order):
-1. `apps/mobile` — Expo (TypeScript) skeleton: navigation shell, guest-auth flow calling
-   `POST /auth/guest` on the API, local `expo-sqlite` wired up (empty for now — M2 adds real sync).
-2. Analytics + crash reporting — wire a provider (PostHog or Sentry are the usual low-friction
-   choices; nothing chosen yet) with no PII in events, per PRD section 7.
-3. Once both land, M1 is complete — move to M2 (`docs/ROADMAP.md`): onboarding -> target
-   calculation UI -> food search/log UI -> offline sync v1 for `food_log`.
+`apps/mobile` is scaffolded: Expo (TypeScript, SDK 58) navigation shell (`@react-navigation`), a
+guest-auth flow that calls `POST /auth/guest` and persists the session via `expo-secure-store`,
+and `expo-sqlite` wired up empty (M2 adds the real sync tables/protocol). Crash reporting +
+lightweight analytics are wired via Sentry (`src/lib/analytics.ts`) - a no-op until
+`EXPO_PUBLIC_SENTRY_DSN` is set, and no PII/health values are ever sent (PRD section 7).
+
+**Next up: M2** (`docs/ROADMAP.md`): onboarding -> target calculation UI -> food search/log UI ->
+offline sync v1 for `food_log`. Fix the Vitest + `emitDecoratorMetadata` issue (see "Known issue"
+below) before writing the first `AuthService`/`FoodController` test.
 
 **Known issue to carry forward**: Vitest is esbuild-based and esbuild does not emit TypeScript's
 `emitDecoratorMetadata`. NestJS constructor injection relies on that metadata. Today's only test
