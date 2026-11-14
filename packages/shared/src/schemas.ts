@@ -28,6 +28,25 @@ export const foodLogEntrySchema = syncableBaseSchema.extend({
 });
 export type FoodLogEntry = z.infer<typeof foodLogEntrySchema>;
 
+// POST /food-log request body - id is client-generated (architecture rule: syncable tables use a
+// client-generated uuid, not a serial, so logging works offline); accountId/isDeleted/updatedAt
+// are server-set, never trusted from the client.
+export const createFoodLogRequestSchema = foodLogEntrySchema.omit({
+  accountId: true,
+  isDeleted: true,
+  updatedAt: true,
+});
+export type CreateFoodLogRequest = z.infer<typeof createFoodLogRequestSchema>;
+
+// PATCH /food-log/:id request body - only the fields a user can actually edit after logging.
+export const updateFoodLogRequestSchema = z.object({
+  quantity: z.number().positive().optional(),
+  unit: z.string().optional(),
+  mealType: mealTypeSchema.optional(),
+  loggedAt: z.string().datetime().optional(),
+});
+export type UpdateFoodLogRequest = z.infer<typeof updateFoodLogRequestSchema>;
+
 export const workoutSetSchema = syncableBaseSchema.extend({
   sessionId: z.string().uuid(),
   exerciseId: z.string(),

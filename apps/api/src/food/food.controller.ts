@@ -1,17 +1,9 @@
-import { BadRequestException, Controller, Get, Query } from "@nestjs/common";
-import { DatabaseService } from "../database/database.service.js";
-
-interface SearchFoodsRow {
-  food_id: number;
-  code: string;
-  name: string;
-  food_type: string;
-  score: number;
-}
+import { BadRequestException, Controller, Get, NotFoundException, Param, Query } from "@nestjs/common";
+import { FoodService } from "./food.service.js";
 
 @Controller("food")
 export class FoodController {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly food: FoodService) {}
 
   /**
    * Thin wrapper over indb.search_foods() (db/0001_indb.sql) - fuzzy name search across INDB recipes
@@ -22,10 +14,16 @@ export class FoodController {
     if (!q || q.trim().length === 0) {
       throw new BadRequestException("Query parameter 'q' is required");
     }
-    const result = await this.db.query<SearchFoodsRow>("SELECT * FROM search_foods($1, $2)", [
-      q,
-      limit ? Number(limit) : 20,
-    ]);
-    return result.rows;
+    return this.food.search(q, limit ? Number(limit) : 20);
+  }
+
+  /** Per-100g macros + serving measures - what a log-meal screen needs to show real nutrition. */
+  @Get(":code")
+  async getDetail(@Param("code") code: string) {
+    const detail = await this.food.getDetail(code);
+    if (!detail) {
+      throw new NotFoundException(`No food with code '${code}'`);
+    }
+    return detail;
   }
 }
