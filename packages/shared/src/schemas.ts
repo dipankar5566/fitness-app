@@ -70,6 +70,7 @@ export type SyncPullResponse = z.infer<typeof syncPullResponseSchema>;
 
 // Profile / goal — PRD §5.1.
 export const dietTypeSchema = z.enum(["veg", "eggetarian", "non_veg", "vegan", "jain"]);
+export type DietType = z.infer<typeof dietTypeSchema>;
 export const goalModeSchema = z.enum(["bulk", "cut", "recomp", "maintain"]);
 export const activityLevelSchema = z.enum(["sedentary", "light", "moderate", "active", "very_active"]);
 
@@ -89,3 +90,15 @@ export const goalSchema = z.object({
   isActive: z.boolean().default(true),
 });
 export type Goal = z.infer<typeof goalSchema>;
+
+// Onboarding request body - PUT /profile (ARCHITECTURE.md: profile + target calculation).
+export const onboardingRequestSchema = z.object({
+  sex: z.enum(["male", "female"]),
+  dob: z.string().date(),
+  heightCm: z.number().positive(),
+  activityLevel: activityLevelSchema,
+  dietType: dietTypeSchema,
+  weightKg: z.number().positive(),
+  goalMode: goalModeSchema,
+});
+export type OnboardingRequest = z.infer<typeof onboardingRequestSchema>;

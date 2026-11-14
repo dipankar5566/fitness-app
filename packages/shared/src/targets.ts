@@ -87,6 +87,19 @@ export function calculateMacroTargets(
   return { kcal, proteinG, fatG, carbG };
 }
 
+/** Whole years between a DOB (YYYY-MM-DD) and `now` - used to turn a stored dob into ageYears. */
+export function calculateAgeYears(dob: string, now: Date = new Date()): number {
+  const birth = new Date(dob);
+  let age = now.getUTCFullYear() - birth.getUTCFullYear();
+  const hadBirthdayThisYear =
+    now.getUTCMonth() > birth.getUTCMonth() ||
+    (now.getUTCMonth() === birth.getUTCMonth() && now.getUTCDate() >= birth.getUTCDate());
+  if (!hadBirthdayThisYear) {
+    age -= 1;
+  }
+  return age;
+}
+
 /** 1-rep-max estimate (Epley formula), used for workout PRs. */
 export function estimateOneRepMax(weightKg: number, reps: number): number {
   if (reps <= 1) return weightKg;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculateAgeYears,
   calculateBmr,
   calculateMacroTargets,
   calculateTdee,
@@ -77,6 +78,20 @@ describe("calculateMacroTargets", () => {
     const start = performance.now();
     calculateMacroTargets(rahul, "cut", true);
     expect(performance.now() - start).toBeLessThan(50);
+  });
+});
+
+describe("calculateAgeYears", () => {
+  it("counts a full year once the birthday has passed this year", () => {
+    expect(calculateAgeYears("2000-01-15", new Date("2024-06-01T00:00:00Z"))).toBe(24);
+  });
+
+  it("does not count this year's birthday until it has happened", () => {
+    expect(calculateAgeYears("2000-12-15", new Date("2024-06-01T00:00:00Z"))).toBe(23);
+  });
+
+  it("counts the birthday itself as turned a year older", () => {
+    expect(calculateAgeYears("2000-06-01", new Date("2024-06-01T00:00:00Z"))).toBe(24);
   });
 });
 
