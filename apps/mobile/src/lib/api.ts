@@ -1,4 +1,9 @@
-import { onboardingRequestSchema, type OnboardingRequest } from "@fitness-app/shared";
+import {
+  createFoodLogRequestSchema,
+  onboardingRequestSchema,
+  type CreateFoodLogRequest,
+  type OnboardingRequest,
+} from "@fitness-app/shared";
 import { z } from "zod";
 
 const guestAuthResponseSchema = z.object({
@@ -86,4 +91,112 @@ export async function submitOnboarding(
     throw new ApiError(`onboarding failed with status ${response.status}`);
   }
   return onboardingResponseSchema.parse(await response.json());
+}
+
+const foodSearchResultSchema = z.object({
+  food_id: z.number(),
+  code: z.string(),
+  name: z.string(),
+  food_type: z.string(),
+  score: z.number(),
+});
+export type FoodSearchResult = z.infer<typeof foodSearchResultSchema>;
+
+export async function searchFoods(apiUrl: string, query: string): Promise<FoodSearchResult[]> {
+  const response = await fetch(`${apiUrl}/food/search?q=${encodeURIComponent(query)}`);
+  if (!response.ok) {
+    throw new ApiError(`food search failed with status ${response.status}`);
+  }
+  return z.array(foodSearchResultSchema).parse(await response.json());
+}
+
+const foodDetailSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  foodType: z.string(),
+  nutrientsPer100g: z.object({
+    kcal: z.number().nullable(),
+    proteinG: z.number().nullable(),
+    fatG: z.number().nullable(),
+    carbG: z.number().nullable(),
+    fibreG: z.number().nullable(),
+  }),
+  servingMeasures: z.array(
+    z.object({ name: z.string(), grams: z.number().nullable(), isDefault: z.boolean() }),
+  ),
+});
+export type FoodDetail = z.infer<typeof foodDetailSchema>;
+
+export async function getFoodDetail(apiUrl: string, code: string): Promise<FoodDetail> {
+  const response = await fetch(`${apiUrl}/food/${encodeURIComponent(code)}`);
+  if (!response.ok) {
+    throw new ApiError(`get food detail failed with status ${response.status}`);
+  }
+  return foodDetailSchema.parse(await response.json());
+}
+
+const macroBreakdownSchema = z.object({
+  kcal: z.number().nullable(),
+  proteinG: z.number().nullable(),
+  fatG: z.number().nullable(),
+  carbG: z.number().nullable(),
+});
+
+const foodLogEntryRowSchema = z.object({
+  id: z.string(),
+  account_id: z.string(),
+  food_source: z.string(),
+  food_ref: z.string(),
+  quantity: z.string(),
+  unit: z.string(),
+  meal_type: z.string(),
+  logged_at: z.string(),
+  source: z.string(),
+  is_estimate: z.boolean(),
+  macros: macroBreakdownSchema.nullable().optional(),
+});
+export type FoodLogEntryRow = z.infer<typeof foodLogEntryRowSchema>;
+
+export async function createFoodLog(
+  apiUrl: string,
+  accessToken: string,
+  input: CreateFoodLogRequest,
+): Promise<FoodLogEntryRow> {
+  const response = await fetch(`${apiUrl}/food-log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(createFoodLogRequestSchema.parse(input)),
+  });
+  if (!response.ok) {
+    throw new ApiError(`create food log failed with status ${response.status}`);
+  }
+  return foodLogEntryRowSchema.parse(await response.json());
+}
+
+export async function listFoodLog(
+  apiUrl: string,
+  accessToken: string,
+  date: string,
+): Promise<FoodLogEntryRow[]> {
+  const response = await fetch(`${apiUrl}/food-log?date=${encodeURIComponent(date)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new ApiError(`list food log failed with status ${response.status}`);
+  }
+  return z.array(foodLogEntryRowSchema).parse(await response.json());
+}
+
+export async function deleteFoodLog(
+  apiUrl: string,
+  accessToken: string,
+  id: string,
+): Promise<void> {
+  const response = await fetch(`${apiUrl}/food-log/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new ApiError(`delete food log failed with status ${response.status}`);
+  }
 }

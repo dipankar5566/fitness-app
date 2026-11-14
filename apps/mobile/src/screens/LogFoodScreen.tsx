@@ -1,0 +1,197 @@
+import type { MealType } from "@fitness-app/shared";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import * as Crypto from "expo-crypto";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Button, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ChipSelect } from "../components/ChipSelect";
+import { trackEvent } from "../lib/analytics";
+import { ApiError, createFoodLog, getFoodDetail, type FoodDetail } from "../lib/api";
+import { loadGuestSession } from "../lib/auth-storage";
+import { API_URL } from "../lib/env";
+import type { RootStackParamList } from "../navigation/RootNavigator";
+
+type Props = NativeStackScreenProps<RootStackParamList, "LogFood">;
+
+const MEAL_TYPES: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
+
+function defaultMealType(): MealType {
+  const hour = new Date().getHours();
+  if (hour < 11) return "breakfast";
+  if (hour < 16) return "lunch";
+  if (hour < 21) return "dinner";
+  return "snack";
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+export function LogFoodScreen({ navigation, route }: Props) {
+  const { accountId, foodCode } = route.params;
+  const [detail, setDetail] = useState<FoodDetail | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [quantity, setQuantity] = useState("100");
+  const [unit, setUnit] = useState("g");
+  const [mealType, setMealType] = useState<MealType>(defaultMealType());
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await getFoodDetail(API_URL, foodCode);
+        setDetail(result);
+        const defaultServing =
+          result.servingMeasures.find((measure) => measure.isDefault) ?? result.servingMeasures[0];
+        if (defaultServing) {
+          setUnit(defaultServing.name);
+          setQuantity("1");
+        }
+      } catch {
+        setLoadFailed(true);
+      }
+    })();
+  }, [foodCode]);
+
+  const unitOptions = useMemo(
+    () => ["g", ...(detail?.servingMeasures ?? []).map((measure) => measure.name)],
+    [detail],
+  );
+
+  const gramsPerUnit = (candidateUnit: string): number | null => {
+    if (candidateUnit === "g" || candidateUnit === "ml") {
+      return 1;
+    }
+    return detail?.servingMeasures.find((measure) => measure.name === candidateUnit)?.grams ?? null;
+  };
+
+  const preview = useMemo(() => {
+    const parsedQuantity = Number(quantity);
+    if (!detail || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      return null;
+    }
+    const perUnit = gramsPerUnit(unit);
+    if (perUnit === null) {
+      return null;
+    }
+    const scale = (parsedQuantity * perUnit) / 100;
+    const scaled = (per100g: number | null) =>
+      per100g === null ? null : Math.round(per100g * scale * 10) / 10;
+    return {
+      kcal: scaled(detail.nutrientsPer100g.kcal),
+      proteinG: scaled(detail.nutrientsPer100g.proteinG),
+      fatG: scaled(detail.nutrientsPer100g.fatG),
+      carbG: scaled(detail.nutrientsPer100g.carbG),
+    };
+  }, [detail, quantity, unit]);
+
+  const handleSubmit = async () => {
+    const parsedQuantity = Number(quantity);
+    if (!detail || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      setSubmitError("Enter a valid quantity.");
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const session = await loadGuestSession();
+      if (!session) {
+        throw new Error("No guest session");
+      }
+      await createFoodLog(API_URL, session.accessToken, {
+        id: Crypto.randomUUID(),
+        foodSource: "indb",
+        foodRef: detail.code,
+        quantity: parsedQuantity,
+        unit,
+        mealType,
+        loggedAt: new Date().toISOString(),
+        source: "manual",
+        isEstimate: false,
+      });
+      trackEvent("food_logged");
+      navigation.navigate("Home", { accountId });
+    } catch (err) {
+      trackEvent("food_log_failed");
+      setSubmitError(
+        err instanceof ApiError ? "Could not save. Try again." : "Something went wrong.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loadFailed) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>Could not load this food. Go back and try again.</Text>
+      </View>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>{detail.name}</Text>
+      <Text style={styles.subtitle}>
+        Per 100g: {detail.nutrientsPer100g.kcal ?? "?"} kcal · {detail.nutrientsPer100g.proteinG ?? "?"}g protein
+      </Text>
+
+      <Text style={styles.label}>Quantity</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        value={quantity}
+        onChangeText={setQuantity}
+      />
+
+      <ChipSelect label="Unit" options={unitOptions} value={unit} onChange={setUnit} />
+      <ChipSelect
+        label="Meal"
+        options={MEAL_TYPES}
+        value={mealType}
+        onChange={setMealType}
+        formatOption={capitalize}
+      />
+
+      {preview ? (
+        <View style={styles.preview}>
+          <Text style={styles.previewTitle}>This entry</Text>
+          <Text>{preview.kcal ?? "?"} kcal</Text>
+          <Text>
+            {preview.proteinG ?? "?"}g protein · {preview.carbG ?? "?"}g carb · {preview.fatG ?? "?"}g fat
+          </Text>
+        </View>
+      ) : null}
+
+      {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
+      <View style={styles.submitButton}>
+        <Button
+          title={isSubmitting ? "Saving..." : "Log it"}
+          onPress={handleSubmit}
+          disabled={isSubmitting}
+        />
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: 24, paddingBottom: 48 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 20, fontWeight: "700" },
+  subtitle: { color: "#666", marginTop: 4, marginBottom: 16 },
+  label: { fontWeight: "600", marginTop: 16, marginBottom: 6 },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10 },
+  preview: { marginTop: 24, padding: 12, backgroundColor: "#f5f5f5", borderRadius: 8, gap: 4 },
+  previewTitle: { fontWeight: "600" },
+  error: { color: "#c00", textAlign: "center", marginTop: 16 },
+  submitButton: { marginTop: 24 },
+});
