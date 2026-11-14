@@ -6,28 +6,50 @@ without re-reading those three docs every time.
 
 ## Current status (read this first)
 
-**M1 (Foundations) is complete.** Verified end-to-end against the real local Postgres `indb`
-database: server boots, `POST /auth/guest` creates a real account row, `GET /food/search?q=idli`
-returns real INDB recipe matches. `pnpm lint`, `pnpm typecheck`, `pnpm test` all pass at the repo
-root. CI workflow exists (`.github/workflows/ci.yml`).
+**M1 (Foundations) is complete.** `apps/mobile` is scaffolded (Expo TypeScript SDK 58, React
+Navigation, guest-auth flow persisted via `expo-secure-store`, `expo-sqlite` wired up empty) and
+crash reporting + lightweight analytics are wired via Sentry (`src/lib/analytics.ts` - a no-op
+until `EXPO_PUBLIC_SENTRY_DSN` is set, no PII/health values ever sent, PRD section 7).
 
-`apps/mobile` is scaffolded: Expo (TypeScript, SDK 58) navigation shell (`@react-navigation`), a
-guest-auth flow that calls `POST /auth/guest` and persists the session via `expo-secure-store`,
-and `expo-sqlite` wired up empty (M2 adds the real sync tables/protocol). Crash reporting +
-lightweight analytics are wired via Sentry (`src/lib/analytics.ts`) - a no-op until
-`EXPO_PUBLIC_SENTRY_DSN` is set, and no PII/health values are ever sent (PRD section 7).
+**M2 (Nutrition core) is in progress.** Done so far, each verified end-to-end against the real
+local Postgres `indb` database (not just unit tests):
+- Onboarding + target calculation: `PUT`/`GET /profile` (`apps/api/src/profile/`) computes and
+  stores macro targets via `packages/shared`'s formulas; `apps/mobile`'s `OnboardingScreen` feeds
+  it and `HomeScreen` displays the result.
+- Food search + logging: `GET /food/:code` (`apps/api/src/food/`) fills the nutrient data
+  `search_foods()` doesn't return; `POST/GET/PATCH/DELETE /food-log` (`apps/api/src/food-log/`)
+  covers manual meal logging with server-computed macros. `apps/mobile`'s `FoodSearchScreen` ->
+  `LogFoodScreen` -> `HomeScreen` flow is wired end-to-end.
 
-**Next up: M2** (`docs/ROADMAP.md`): onboarding -> target calculation UI -> food search/log UI ->
-offline sync v1 for `food_log`. Fix the Vitest + `emitDecoratorMetadata` issue (see "Known issue"
-below) before writing the first `AuthService`/`FoodController` test.
+**Still open in M2** (`docs/ROADMAP.md`): diet-type filtering - **blocked**, the `indb` schema
+(`db/migrations/0001_indb.sql`) carries no veg/non-veg/vegan metadata on `food`/`food_name`, so
+this needs a data-model addition (new column + backfill) before it's implementable, not just UI
+work; custom foods/recipes (`app.custom_food`/`app.custom_food_ingredient` tables already exist,
+unused); offline-first behavior - logging currently requires connectivity, `expo-sqlite` is still
+empty, and the `/sync` endpoint from `ARCHITECTURE.md` section 3 doesn't exist yet even though the
+Zod sync-envelope schemas in `packages/shared/schemas.ts` do.
 
-**Known issue to carry forward**: Vitest is esbuild-based and esbuild does not emit TypeScript's
-`emitDecoratorMetadata`. NestJS constructor injection relies on that metadata. Today's only test
-(`HealthController`) has no injected dependencies, so it is unaffected - but the first test for
-`AuthService` or `FoodController` (both take constructor-injected services) will fail the same way
-the API itself did (see "Architecture rules" below) unless Vitest is configured with
-`unplugin-swc` (or similar) first, or the test uses explicit `@Inject()` tokens. Fix this *before*
-writing those tests in M2, not after they mysteriously fail.
+**Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
+`emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
+now uses `unplugin-swc` with `decoratorMetadata: true` instead. Verified with `AuthService`'s test
+(real constructor injection of `DatabaseService`/`JwtService`). Every `apps/api` service test
+since (`ProfileService`, `FoodService`, `FoodLogService`) mocks `DatabaseService` the same way -
+follow that pattern, no special config needed per-test.
+
+**Known trap: cross-package imports between `apps/api` and `packages/shared`.** `apps/api` uses
+`"moduleResolution": "NodeNext"` (requires `.js` extensions on relative imports, checked at
+typecheck time) but `packages/shared` is consumed as raw `.ts` source with no build step for
+`"main"` (needed so Metro/Vite/Node's native TS runtime can resolve it - extensionless imports
+only, confirmed by an actual `ERR_MODULE_NOT_FOUND` when this was gotten wrong). The fix already in
+place: `packages/shared/src/index.ts` (the `"main"` entry, extensionless/`.ts`-extension imports,
+runtime-only) is a **separate file** from `src/index.types.ts` (the `"types"` entry, `.js`-extension
+imports, declaration-only build via `tsconfig.build.json` -> `dist/`, which `apps/api`'s
+`skipLibCheck` then treats as an opaque library). **Adding a new export to `packages/shared`?**
+Add it to the relevant file under `src/` as normal - both `index.ts` and `index.types.ts` already
+re-export everything via `export *`, so no changes needed there unless you add a new top-level
+file. Do not collapse these two files back into one; do not add `.js` extensions to `index.ts` or
+remove them from `index.types.ts`. `turbo.json`'s `typecheck` task depends on `^build` so
+`packages/shared`'s declarations rebuild automatically before any dependent package typechecks.
 
 ## Repo map
 
@@ -35,10 +57,16 @@ writing those tests in M2, not after they mysteriously fail.
 apps/
   api/                 NestJS API (TypeScript, ESM). src/<feature>/*.controller.ts,
                        *.service.ts, *.module.ts. dev script uses tsc-watch, NOT tsx (see below).
-  mobile/              Expo app (TypeScript). Not yet scaffolded - next up.
+                       Features so far: health, auth (guest JWT), food (search + detail),
+                       food-log (manual meal log CRUD), profile (onboarding + targets).
+  mobile/              Expo app (TypeScript, SDK 58), React Navigation stack. src/screens/,
+                       src/lib/ (api.ts client, analytics.ts, auth-storage.ts, env.ts, db.ts),
+                       src/components/ (ChipSelect, a generic enum picker reused across screens).
 packages/
   shared/              Pure TS: nutrition/target formulas (targets.ts) and Zod schemas
                        (schemas.ts) shared by apps/api and apps/mobile. No I/O, no framework deps.
+                       Two entry points, not one - see "Known trap" above before touching index.ts
+                       or index.types.ts.
 db/
   migrations/          Plain numbered .sql files, applied in order by migrate.ts.
                        0001_indb.sql = verbatim copy of indb/schema.sql (do not hand-edit here -
@@ -129,9 +157,9 @@ eslint.config.mjs      Single root-level flat config. Do not add per-package ESL
 - **Before considering any feature "done"**: `pnpm lint && pnpm typecheck && pnpm test` must pass
   at the repo root (this is also exactly what `.github/workflows/ci.yml` runs).
 - **Manual end-to-end smoke tests** (booting the API, curling endpoints) are good for verifying
-  new features during development, but are not a substitute for a committed automated test -
-  M1's manual guest-account/food-search verification should eventually get a real `AuthService`/
-  `FoodController` test once the decorator-metadata issue above is resolved.
+  new features during development, but are not a substitute for a committed automated test - every
+  `apps/api` feature so far (auth, profile, food, food-log) has both: a mocked-`DatabaseService`
+  unit test *and* a manual curl pass against the real `indb` database before being called done.
 
 ## Commands
 
