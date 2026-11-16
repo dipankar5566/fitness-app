@@ -7,9 +7,9 @@ import {
   markClean,
   softDelete,
   type LocalFoodLogRow,
-} from "./food-log-repo.js";
-import { createTestDb } from "./node-sqlite-test-db.js";
-import type { SqlDb } from "./sql-db.js";
+} from "./food-log-repo";
+import { createTestDb } from "./node-sqlite-test-db";
+import type { SqlDb } from "./sql-db";
 
 const ROW: LocalFoodLogRow = {
   id: "11111111-1111-1111-1111-111111111111",

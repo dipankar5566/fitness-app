@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
-import { migrate } from "./db-schema.js";
-import type { SqlDb } from "./sql-db.js";
+import { migrate } from "./db-schema";
+import type { SqlDb } from "./sql-db";
 
 // Vite/Vitest's module resolver doesn't recognize the newer `node:sqlite` builtin as external and
 // tries to bundle it, which fails - createRequire bypasses Vite's resolution and uses Node's own.

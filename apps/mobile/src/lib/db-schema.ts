@@ -1,4 +1,4 @@
-import type { SqlDb } from "./sql-db.js";
+import type { SqlDb } from "./sql-db";
 
 const SCHEMA_VERSION = 2;
 

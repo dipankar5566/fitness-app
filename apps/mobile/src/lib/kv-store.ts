@@ -1,4 +1,4 @@
-import type { SqlDb } from "./sql-db.js";
+import type { SqlDb } from "./sql-db";
 
 export async function getKv(db: SqlDb, key: string): Promise<string | null> {
   const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key]);

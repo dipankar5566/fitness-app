@@ -13,9 +13,9 @@ import {
   softDeleteCustomFood,
   type LocalCustomFood,
   type LocalCustomFoodIngredient,
-} from "./custom-food-repo.js";
-import { createTestDb } from "./node-sqlite-test-db.js";
-import type { SqlDb } from "./sql-db.js";
+} from "./custom-food-repo";
+import { createTestDb } from "./node-sqlite-test-db";
+import type { SqlDb } from "./sql-db";
 
 const CUSTOM_FOOD: LocalCustomFood = {
   id: "11111111-1111-1111-1111-111111111111",

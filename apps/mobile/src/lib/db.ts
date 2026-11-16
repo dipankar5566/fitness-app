@@ -1,6 +1,6 @@
 import { openDatabaseAsync, type SQLiteBindParams, type SQLiteDatabase } from "expo-sqlite";
-import { migrate } from "./db-schema.js";
-import type { SqlDb } from "./sql-db.js";
+import { migrate } from "./db-schema";
+import type { SqlDb } from "./sql-db";
 
 const DATABASE_NAME = "fitness.db";
 

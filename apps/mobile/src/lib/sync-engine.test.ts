@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getDirtyCustomFoods, insertCustomFood, listCustomFoods, type LocalCustomFood } from "./custom-food-repo.js";
-import { getDirty, insert, listByLocalDay, type LocalFoodLogRow } from "./food-log-repo.js";
-import { getKv } from "./kv-store.js";
-import { createTestDb } from "./node-sqlite-test-db.js";
-import type { SqlDb } from "./sql-db.js";
+import { getDirtyCustomFoods, insertCustomFood, listCustomFoods, type LocalCustomFood } from "./custom-food-repo";
+import { getDirty, insert, listByLocalDay, type LocalFoodLogRow } from "./food-log-repo";
+import { getKv } from "./kv-store";
+import { createTestDb } from "./node-sqlite-test-db";
+import type { SqlDb } from "./sql-db";
 
-vi.mock("./analytics.js", () => ({ trackEvent: vi.fn() }));
-vi.mock("./api.js", () => ({
+vi.mock("./analytics", () => ({ trackEvent: vi.fn() }));
+vi.mock("./api", () => ({
   pushSync: vi.fn(),
   pullSync: vi.fn(),
   isNetworkError: (error: unknown) => error instanceof TypeError,
@@ -37,7 +37,7 @@ describe("sync-engine", () => {
   });
 
   it("pushes dirty rows, marks the applied ones clean, then pulls and stores the new token", async () => {
-    const { pushSync, pullSync } = await import("./api.js");
+    const { pushSync, pullSync } = await import("./api");
     (pushSync as ReturnType<typeof vi.fn>).mockResolvedValue({ applied: [ROW.id], rejected: [] });
     (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({
       changes: [
@@ -65,7 +65,7 @@ describe("sync-engine", () => {
     });
     await insert(db, ROW);
 
-    const { syncNow } = await import("./sync-engine.js");
+    const { syncNow } = await import("./sync-engine");
     await syncNow(db, "http://localhost:3001", "token-1");
 
     expect(await getDirty(db)).toEqual([]); // the pushed row was marked clean
@@ -76,17 +76,17 @@ describe("sync-engine", () => {
   });
 
   it("does not push when there is nothing dirty", async () => {
-    const { pushSync, pullSync } = await import("./api.js");
+    const { pushSync, pullSync } = await import("./api");
     (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({ changes: [], nextSyncToken: "t1" });
 
-    const { syncNow } = await import("./sync-engine.js");
+    const { syncNow } = await import("./sync-engine");
     await syncNow(db, "http://localhost:3001", "token-1");
 
     expect(pushSync).not.toHaveBeenCalled();
   });
 
   it("leaves a row dirty when the server rejects it", async () => {
-    const { pushSync, pullSync } = await import("./api.js");
+    const { pushSync, pullSync } = await import("./api");
     (pushSync as ReturnType<typeof vi.fn>).mockResolvedValue({
       applied: [],
       rejected: [{ id: ROW.id, reason: "stale" }],
@@ -94,25 +94,25 @@ describe("sync-engine", () => {
     (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({ changes: [], nextSyncToken: "t1" });
     await insert(db, ROW);
 
-    const { syncNow } = await import("./sync-engine.js");
+    const { syncNow } = await import("./sync-engine");
     await syncNow(db, "http://localhost:3001", "token-1");
 
     expect((await getDirty(db)).map((row) => row.id)).toEqual([ROW.id]);
   });
 
   it("swallows a network error instead of throwing, and leaves rows dirty", async () => {
-    const { pushSync } = await import("./api.js");
+    const { pushSync } = await import("./api");
     (pushSync as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError("Failed to fetch"));
     await insert(db, ROW);
 
-    const { syncNow } = await import("./sync-engine.js");
+    const { syncNow } = await import("./sync-engine");
     await expect(syncNow(db, "http://localhost:3001", "token-1")).resolves.toBeUndefined();
 
     expect((await getDirty(db)).map((row) => row.id)).toEqual([ROW.id]);
   });
 
   it("pushes dirty rows across tables in one call, and routes a pulled custom_food change to its own repo", async () => {
-    const { pushSync, pullSync } = await import("./api.js");
+    const { pushSync, pullSync } = await import("./api");
     const customFood: LocalCustomFood = {
       id: "33333333-3333-3333-3333-333333333333",
       accountId: "account-1",
@@ -143,7 +143,7 @@ describe("sync-engine", () => {
     await insert(db, ROW);
     await insertCustomFood(db, customFood);
 
-    const { syncNow } = await import("./sync-engine.js");
+    const { syncNow } = await import("./sync-engine");
     await syncNow(db, "http://localhost:3001", "token-1");
 
     expect(pushSync).toHaveBeenCalledWith(
@@ -163,10 +163,10 @@ describe("sync-engine", () => {
   });
 
   it("collapses overlapping calls into a single run", async () => {
-    const { pushSync, pullSync } = await import("./api.js");
+    const { pushSync, pullSync } = await import("./api");
     (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({ changes: [], nextSyncToken: "t1" });
 
-    const { syncNow } = await import("./sync-engine.js");
+    const { syncNow } = await import("./sync-engine");
     const first = syncNow(db, "http://localhost:3001", "token-1");
     const second = syncNow(db, "http://localhost:3001", "token-1");
     await Promise.all([first, second]);

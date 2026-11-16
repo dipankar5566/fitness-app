@@ -1,5 +1,5 @@
-import type { FoodDetail } from "./api.js";
-import type { SqlDb } from "./sql-db.js";
+import type { FoodDetail } from "./api";
+import type { SqlDb } from "./sql-db";
 
 /** Caches a food detail lookup so LogFoodScreen/FoodSearchScreen can work offline for recently-seen foods. */
 export async function cacheFood(db: SqlDb, detail: FoodDetail): Promise<void> {

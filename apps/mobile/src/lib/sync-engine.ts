@@ -1,5 +1,5 @@
-import { trackEvent } from "./analytics.js";
-import { isNetworkError, pullSync, pushSync } from "./api.js";
+import { trackEvent } from "./analytics";
+import { isNetworkError, pullSync, pushSync } from "./api";
 import {
   applyRemoteCustomFoods,
   applyRemoteIngredients,
@@ -9,10 +9,10 @@ import {
   markIngredientClean,
   type LocalCustomFood,
   type LocalCustomFoodIngredient,
-} from "./custom-food-repo.js";
-import { applyRemote, getDirty, markClean, type RemoteFoodLogRow } from "./food-log-repo.js";
-import { getKv, setKv } from "./kv-store.js";
-import type { SqlDb } from "./sql-db.js";
+} from "./custom-food-repo";
+import { applyRemote, getDirty, markClean, type RemoteFoodLogRow } from "./food-log-repo";
+import { getKv, setKv } from "./kv-store";
+import type { SqlDb } from "./sql-db";
 
 const SYNC_TOKEN_KEY = "sync_token";
 

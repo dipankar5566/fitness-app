@@ -1,4 +1,4 @@
-import type { SqlDb } from "./sql-db.js";
+import type { SqlDb } from "./sql-db";
 
 export interface LocalMacros {
   kcal: number | null;
