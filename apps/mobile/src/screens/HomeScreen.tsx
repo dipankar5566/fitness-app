@@ -107,7 +107,10 @@ export function HomeScreen({ navigation, route }: Props) {
             <Button title="My foods" onPress={() => navigation.navigate("MyFoods", { accountId })} />
           </View>
           <View style={styles.logButton}>
-            <Button title="Exercises" onPress={() => navigation.navigate("ExerciseLibrary")} />
+            <Button title="Exercises" onPress={() => navigation.navigate("ExerciseLibrary", { accountId })} />
+          </View>
+          <View style={styles.logButton}>
+            <Button title="Workout" onPress={() => navigation.navigate("WorkoutSession", { accountId })} />
           </View>
           {!isLoading && entries.length === 0 ? (
             <Text style={styles.empty}>Nothing logged today yet.</Text>

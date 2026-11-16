@@ -4,6 +4,16 @@ import { getDirty, insert, listByLocalDay, type LocalFoodLogRow } from "./food-l
 import { getKv } from "./kv-store";
 import { createTestDb } from "./node-sqlite-test-db";
 import type { SqlDb } from "./sql-db";
+import {
+  getActiveSession,
+  getDirtySessions,
+  getDirtySets,
+  insertSession,
+  insertSet,
+  listSetsForSession,
+  type LocalWorkoutSession,
+  type LocalWorkoutSet,
+} from "./workout-repo";
 
 vi.mock("./analytics", () => ({ trackEvent: vi.fn() }));
 vi.mock("./api", () => ({
@@ -160,6 +170,64 @@ describe("sync-engine", () => {
     expect(await getDirtyCustomFoods(db)).toEqual([]);
     const customFoods = await listCustomFoods(db, "account-1");
     expect(customFoods.map((f) => f.name)).toContain("Pulled from another device");
+  });
+
+  it("pushes a session and set, ordering the session before the set, and applies a pulled session end", async () => {
+    const { pushSync, pullSync } = await import("./api");
+    const session: LocalWorkoutSession = {
+      id: "55555555-5555-5555-5555-555555555555",
+      accountId: "account-1",
+      programDayId: null,
+      startedAt: "2026-11-16T08:00:00.000Z",
+      endedAt: null,
+      isDeleted: false,
+      updatedAt: "2026-11-16T08:00:00.000Z",
+    };
+    const set: LocalWorkoutSet = {
+      id: "66666666-6666-6666-6666-666666666666",
+      accountId: "account-1",
+      sessionId: session.id,
+      exerciseId: "Bench_Press",
+      exerciseName: "Bench Press",
+      setNo: 1,
+      reps: 8,
+      weightKg: 60,
+      rpe: null,
+      isWarmup: false,
+      isDeleted: false,
+      updatedAt: "2026-11-16T08:05:00.000Z",
+    };
+    (pushSync as ReturnType<typeof vi.fn>).mockResolvedValue({ applied: [session.id, set.id], rejected: [] });
+    (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      changes: [
+        {
+          table: "workout_session",
+          op: "upsert",
+          row: { ...session, endedAt: "2026-11-16T09:00:00.000Z", updatedAt: "2026-11-16T09:00:00.000Z" },
+        },
+      ],
+      nextSyncToken: "2026-11-16T09:00:00.000Z",
+    });
+    await insertSession(db, session);
+    await insertSet(db, set);
+
+    const { syncNow } = await import("./sync-engine");
+    await syncNow(db, "http://localhost:3001", "token-1");
+
+    const [, , pushed] = (pushSync as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      string,
+      { rows: { table: string }[] },
+    ];
+    const sessionIndex = pushed.rows.findIndex((r) => r.table === "workout_session");
+    const setIndex = pushed.rows.findIndex((r) => r.table === "workout_set");
+    expect(sessionIndex).toBeGreaterThanOrEqual(0);
+    expect(sessionIndex).toBeLessThan(setIndex);
+
+    expect(await getDirtySessions(db)).toEqual([]);
+    expect(await getDirtySets(db)).toEqual([]);
+    expect(await getActiveSession(db, "account-1")).toBeNull(); // the pulled "ended" change was applied
+    expect((await listSetsForSession(db, session.id))[0].exerciseName).toBe("Bench Press"); // untouched
   });
 
   it("collapses overlapping calls into a single run", async () => {

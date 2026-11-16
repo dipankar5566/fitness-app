@@ -1,6 +1,6 @@
 import type { SqlDb } from "./sql-db";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * Local SQLite mirror for offline sync (ARCHITECTURE.md section 3). `food_log` mirrors app.food_log
@@ -9,7 +9,9 @@ const SCHEMA_VERSION = 2;
  * `food_cache` lets LogFoodScreen/FoodSearchScreen work offline for recently-seen foods. `kv` holds
  * the sync token and a cached profile snapshot for the offline-cold-start case. `custom_food`/
  * `custom_food_ingredient` mirror their app.* counterparts the same way as food_log, for offline
- * recipe building/logging.
+ * recipe building/logging. `workout_session`/`workout_set` mirror app.workout_session/
+ * app.workout_set the same way, for offline workout logging; `workout_set.exercise_name` is a
+ * local-only display snapshot (like food_log's macro columns) - the synced row has no such column.
  *
  * Deliberately has no expo-sqlite import, unlike db.ts, so tests can run this against a `node:sqlite`
  * -backed SqlDb without trying to load the native module outside React Native.
@@ -78,6 +80,41 @@ export async function migrate(db: SqlDb): Promise<void> {
     `);
     await db.execAsync(
       "CREATE INDEX IF NOT EXISTS custom_food_ingredient_parent_idx ON custom_food_ingredient (custom_food_id)",
+    );
+  }
+
+  if (currentVersion < 3) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS workout_session (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        program_day_id TEXT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        is_dirty INTEGER NOT NULL DEFAULT 1
+      )
+    `);
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS workout_set (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        exercise_id TEXT NOT NULL,
+        exercise_name TEXT,
+        set_no INTEGER NOT NULL,
+        reps INTEGER NOT NULL,
+        weight_kg REAL NOT NULL DEFAULT 0,
+        rpe REAL,
+        is_warmup INTEGER NOT NULL DEFAULT 0,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        is_dirty INTEGER NOT NULL DEFAULT 1
+      )
+    `);
+    await db.execAsync(
+      "CREATE INDEX IF NOT EXISTS workout_set_session_idx ON workout_set (session_id)",
     );
   }
 

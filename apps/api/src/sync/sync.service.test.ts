@@ -120,13 +120,64 @@ describe("SyncService", () => {
     });
 
     it("rejects an unregistered table as invalid", async () => {
+      // body_metric is in syncTableNameSchema but has no adapter yet (no screens exist for it) -
+      // workout_session/workout_set are registered now, so this uses the one still unregistered.
       const result = await service.push("account-1", {
         syncToken: null,
-        rows: [{ table: "workout_session", op: "upsert", row: { id: "ws-1" } }],
+        rows: [{ table: "body_metric", op: "upsert", row: { id: "bm-1" } }],
       });
 
-      expect(result).toEqual({ applied: [], rejected: [{ id: "ws-1", reason: "invalid" }] });
+      expect(result).toEqual({ applied: [], rejected: [{ id: "bm-1", reason: "invalid" }] });
       expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it("upserts a workout_session row through the registry, account_id from the JWT", async () => {
+      client.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const row = {
+        id: "55555555-5555-5555-5555-555555555555",
+        accountId: "99999999-9999-9999-9999-999999999999", // must be ignored - account comes from the JWT
+        isDeleted: false,
+        updatedAt: "2026-11-16T08:00:00.000Z",
+        startedAt: "2026-11-16T08:00:00.000Z",
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "workout_session", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [row.id], rejected: [] });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO app.workout_session"),
+        expect.arrayContaining(["account-1", row.startedAt]),
+      );
+    });
+
+    it("upserts a workout_set row through the registry", async () => {
+      client.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const row = {
+        id: "66666666-6666-6666-6666-666666666666",
+        accountId: "99999999-9999-9999-9999-999999999999",
+        isDeleted: false,
+        updatedAt: "2026-11-16T08:05:00.000Z",
+        sessionId: "55555555-5555-5555-5555-555555555555",
+        exerciseId: "Bench_Press",
+        setNo: 1,
+        reps: 8,
+        weightKg: 60,
+        isWarmup: false,
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "workout_set", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [row.id], rejected: [] });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO app.workout_set"),
+        expect.arrayContaining(["account-1", row.sessionId, row.exerciseId, 8, 60]),
+      );
     });
 
     it("upserts a custom_food row through the registry, account_id from the JWT", async () => {
@@ -274,7 +325,8 @@ describe("SyncService", () => {
             },
           ],
         })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce({ rows: [] }) // custom_food_ingredient: nothing changed
+        .mockResolvedValue({ rows: [] }); // workout_session / workout_set: nothing changed
 
       const result = await service.pull("account-1", null);
 

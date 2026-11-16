@@ -1,5 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import { customFoodIngredientSchema, customFoodSchema, foodLogEntrySchema } from "@fitness-app/shared";
+import {
+  customFoodIngredientSchema,
+  customFoodSchema,
+  foodLogEntrySchema,
+  workoutSessionSchema,
+  workoutSetSchema,
+} from "@fitness-app/shared";
 import type {
   SyncPullResponse,
   SyncPushRequest,
@@ -136,15 +142,86 @@ const customFoodIngredientAdapter: TableAdapter = {
   }),
 };
 
-/** One adapter per syncable table actually wired up so far - workout_session/workout_set/body_metric
- * join the same way once their screens exist (M3): add an adapter, add it here, done. push()/pull()
- * never special-case a table beyond this map (food_log's macro enrichment in pull() is the one
- * exception, since macros aren't part of the row's own stored columns). accountId is always taken
- * from the JWT, never the pushed row, so a row can never be pushed into someone else's account. */
+const workoutSessionAdapter: TableAdapter = {
+  upsertSchema: workoutSessionSchema,
+  deleteSchema: deleteRowSchema,
+  conflictTable: "app.workout_session",
+  upsertSql: `INSERT INTO app.workout_session (id, account_id, program_day_id, started_at, ended_at, is_deleted, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (id) DO UPDATE SET
+       program_day_id = EXCLUDED.program_day_id, started_at = EXCLUDED.started_at, ended_at = EXCLUDED.ended_at,
+       is_deleted = EXCLUDED.is_deleted, updated_at = EXCLUDED.updated_at, server_updated_at = now()
+     WHERE app.workout_session.account_id = $2 AND app.workout_session.updated_at <= EXCLUDED.updated_at`,
+  upsertParams: (accountId, row) => [
+    row.id, accountId, row.programDayId ?? null, row.startedAt, row.endedAt ?? null, row.isDeleted, row.updatedAt,
+  ],
+  deleteSql: `UPDATE app.workout_session SET is_deleted = true, updated_at = $3, server_updated_at = now()
+     WHERE id = $1 AND account_id = $2 AND updated_at <= $3`,
+  deleteParams: (accountId, row) => [row.id, accountId, row.updatedAt],
+  selectSql: (hasSince) =>
+    hasSince
+      ? "SELECT * FROM app.workout_session WHERE account_id = $1 AND server_updated_at > $2 ORDER BY server_updated_at"
+      : "SELECT * FROM app.workout_session WHERE account_id = $1 ORDER BY server_updated_at",
+  toChangeRow: (row) => ({
+    id: row.id,
+    accountId: row.account_id,
+    isDeleted: row.is_deleted,
+    updatedAt: (row.updated_at as Date).toISOString(),
+    programDayId: row.program_day_id ?? undefined,
+    startedAt: (row.started_at as Date).toISOString(),
+    endedAt: row.ended_at ? (row.ended_at as Date).toISOString() : undefined,
+  }),
+};
+
+const workoutSetAdapter: TableAdapter = {
+  upsertSchema: workoutSetSchema,
+  deleteSchema: deleteRowSchema,
+  conflictTable: "app.workout_set",
+  upsertSql: `INSERT INTO app.workout_set
+       (id, account_id, session_id, exercise_id, set_no, reps, weight_kg, rpe, is_warmup, is_deleted, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (id) DO UPDATE SET
+       session_id = EXCLUDED.session_id, exercise_id = EXCLUDED.exercise_id, set_no = EXCLUDED.set_no,
+       reps = EXCLUDED.reps, weight_kg = EXCLUDED.weight_kg, rpe = EXCLUDED.rpe, is_warmup = EXCLUDED.is_warmup,
+       is_deleted = EXCLUDED.is_deleted, updated_at = EXCLUDED.updated_at, server_updated_at = now()
+     WHERE app.workout_set.account_id = $2 AND app.workout_set.updated_at <= EXCLUDED.updated_at`,
+  upsertParams: (accountId, row) => [
+    row.id, accountId, row.sessionId, row.exerciseId, row.setNo, row.reps, row.weightKg,
+    row.rpe ?? null, row.isWarmup, row.isDeleted, row.updatedAt,
+  ],
+  deleteSql: `UPDATE app.workout_set SET is_deleted = true, updated_at = $3, server_updated_at = now()
+     WHERE id = $1 AND account_id = $2 AND updated_at <= $3`,
+  deleteParams: (accountId, row) => [row.id, accountId, row.updatedAt],
+  selectSql: (hasSince) =>
+    hasSince
+      ? "SELECT * FROM app.workout_set WHERE account_id = $1 AND server_updated_at > $2 ORDER BY server_updated_at"
+      : "SELECT * FROM app.workout_set WHERE account_id = $1 ORDER BY server_updated_at",
+  toChangeRow: (row) => ({
+    id: row.id,
+    accountId: row.account_id,
+    isDeleted: row.is_deleted,
+    updatedAt: (row.updated_at as Date).toISOString(),
+    sessionId: row.session_id,
+    exerciseId: row.exercise_id,
+    setNo: row.set_no,
+    reps: row.reps,
+    weightKg: Number(row.weight_kg),
+    rpe: row.rpe !== null ? Number(row.rpe) : undefined,
+    isWarmup: row.is_warmup,
+  }),
+};
+
+/** One adapter per syncable table actually wired up so far - body_metric joins the same way once
+ * its screens exist (M3/M6): add an adapter, add it here, done. push()/pull() never special-case a
+ * table beyond this map (food_log's macro enrichment in pull() is the one exception, since macros
+ * aren't part of the row's own stored columns). accountId is always taken from the JWT, never the
+ * pushed row, so a row can never be pushed into someone else's account. */
 const registry: Partial<Record<SyncTableName, TableAdapter>> = {
   food_log: foodLogAdapter,
   custom_food: customFoodAdapter,
   custom_food_ingredient: customFoodIngredientAdapter,
+  workout_session: workoutSessionAdapter,
+  workout_set: workoutSetAdapter,
 };
 
 @Injectable()

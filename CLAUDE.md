@@ -91,11 +91,25 @@ trip for data already in hand) is wired to a new "Exercises" button on `HomeScre
 curl against the real `indb` database (unfiltered count, muscle-only, equipment-only, combined,
 and a 400 on an invalid muscle value) plus unit tests in both `apps/api` and `apps/mobile`.
 
-Still to do for M3: workout session logger (offline, same `/sync` shape extended to
-`workout_session`/`workout_set` - the shared Zod schemas and sync-table enum already exist from
-M1/M2 scaffolding, but `sync.service.ts`'s per-table adapter registry isn't wired up for them yet),
-PRs (Epley 1RM, rep PRs), the 3 built-in programs + home/no-equipment program, and the "follow
-program" flow.
+Third roadmap item done: workout session logger, fully offline. `app.workout_session`/
+`app.workout_set` now have adapters in `sync.service.ts`'s registry (same shape as `food_log`'s -
+no macro-style enrichment needed, so these are simpler). `apps/mobile/src/lib/workout-repo.ts` is
+the outbox for both tables, following `custom-food-repo.ts`'s dirty-flag/`applyRemote*` pattern -
+`workout_set.exercise_name` is a **local-only** display snapshot (like `food_log`'s macro columns),
+never sent to or expected from the server. `sync-engine.ts` pushes sessions before their sets in
+the same batch (parent-before-child, same ordering `custom_food`/`custom_food_ingredient` already
+rely on, since a push applies rows in array order within one transaction and a new session's sets
+FK to it). `apps/mobile`'s `WorkoutSessionScreen` (start/resume today's session, "Add exercise" ->
+`ExerciseLibraryScreen` in a new `mode: "pickExercise"` that hands the pick back via route params -
+the same pattern `CreateCustomFoodScreen`/`FoodSearchScreen` use for picking an ingredient -> inline
+reps/weight/RPE/warm-up form -> "End workout") is wired to a new "Workout" button on `HomeScreen`.
+Verified against the real `indb` database: curl push/pull/stale-reject/soft-delete through `/sync`
+for both tables (including a real FK to an imported exercise id), psql spot-check of the landed
+rows, plus unit tests in both `apps/api` (`sync.service.test.ts`) and `apps/mobile`
+(`workout-repo.test.ts`, `sync-engine.test.ts`).
+
+Still to do for M3: PRs (Epley 1RM, rep PRs - `workout_set_pr_idx` already exists for this), the 3
+built-in programs + home/no-equipment program, and the "follow program" flow.
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`

@@ -16,7 +16,7 @@ function formatLabel(value: string): string {
   return value.replace(/^./, (c) => c.toUpperCase());
 }
 
-export function ExerciseLibraryScreen({ navigation }: Props) {
+export function ExerciseLibraryScreen({ navigation, route }: Props) {
   const [muscle, setMuscle] = useState<(typeof MUSCLE_OPTIONS)[number]>("all");
   const [equipment, setEquipment] = useState<(typeof EQUIPMENT_OPTIONS)[number]>("all");
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -64,7 +64,11 @@ export function ExerciseLibraryScreen({ navigation }: Props) {
         renderItem={({ item }) => (
           <Pressable
             style={styles.row}
-            onPress={() => navigation.navigate("ExerciseDetail", { exercise: item })}
+            onPress={() =>
+              route.params?.mode === "pickExercise"
+                ? navigation.navigate("WorkoutSession", { accountId: route.params.accountId, pickedExercise: item })
+                : navigation.navigate("ExerciseDetail", { exercise: item })
+            }
           >
             <Text style={styles.name}>{item.name}</Text>
             <Text style={styles.meta}>
