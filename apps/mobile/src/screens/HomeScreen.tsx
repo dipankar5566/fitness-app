@@ -107,6 +107,9 @@ export function HomeScreen({ navigation, route }: Props) {
             <Button title="Log meal (AI)" onPress={() => navigation.navigate("LogMealFromText", { accountId })} />
           </View>
           <View style={styles.logButton}>
+            <Button title="Scan barcode" onPress={() => navigation.navigate("BarcodeScan", { accountId })} />
+          </View>
+          <View style={styles.logButton}>
             <Button title="My foods" onPress={() => navigation.navigate("MyFoods", { accountId })} />
           </View>
           <View style={styles.logButton}>

@@ -1,6 +1,7 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { Exercise } from "../lib/api";
+import { BarcodeScanScreen } from "../screens/BarcodeScanScreen";
 import { CreateCustomFoodScreen } from "../screens/CreateCustomFoodScreen";
 import { ExerciseDetailScreen } from "../screens/ExerciseDetailScreen";
 import { ExerciseLibraryScreen } from "../screens/ExerciseLibraryScreen";
@@ -10,6 +11,7 @@ import { HomeScreen } from "../screens/HomeScreen";
 import { IngredientQuantityScreen } from "../screens/IngredientQuantityScreen";
 import { LogFoodScreen } from "../screens/LogFoodScreen";
 import { LogMealFromTextScreen } from "../screens/LogMealFromTextScreen";
+import { LogPackagedFoodScreen } from "../screens/LogPackagedFoodScreen";
 import { MyFoodsScreen } from "../screens/MyFoodsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { ProgramsScreen } from "../screens/ProgramsScreen";
@@ -38,6 +40,8 @@ export type RootStackParamList = {
     accountId: string;
     pickedMealItemFood?: { index: number; code: string; name: string };
   };
+  BarcodeScan: { accountId: string };
+  LogPackagedFood: { accountId: string; barcode: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -94,6 +98,16 @@ export function RootNavigator() {
           name="LogMealFromText"
           component={LogMealFromTextScreen}
           options={{ title: "Log a meal" }}
+        />
+        <Stack.Screen
+          name="BarcodeScan"
+          component={BarcodeScanScreen}
+          options={{ title: "Scan barcode" }}
+        />
+        <Stack.Screen
+          name="LogPackagedFood"
+          component={LogPackagedFoodScreen}
+          options={{ title: "Log product" }}
         />
       </Stack.Navigator>
     </NavigationContainer>

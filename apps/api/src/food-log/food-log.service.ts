@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 import type { CreateFoodLogRequest, UpdateFoodLogRequest } from "@fitness-app/shared";
 import { DatabaseService } from "../database/database.service.js";
 import { FoodService, type FoodNutrientSummary } from "../food/food.service.js";
+import { PackagedFoodService } from "../packaged-food/packaged-food.service.js";
 
 interface FoodLogRow {
   id: string;
@@ -132,19 +133,25 @@ async function computeCustomFoodMacrosPerGram(
   return perGramById;
 }
 
-/** Enriches raw food_log rows with real macros for indb-sourced rows (ARCHITECTURE.md §2) and
- * custom-food rows (sum of each recipe's indb-sourced ingredients, scaled by grams logged). Pulled
- * out of `listByDate` so the sync pull path (which also returns food_log rows) can reuse it. */
+/** Enriches raw food_log rows with real macros for indb-sourced rows (ARCHITECTURE.md §2),
+ * custom-food rows (sum of each recipe's indb-sourced ingredients, scaled by grams logged), and
+ * packaged-food rows (Open Food Facts, PRD §5.5). Pulled out of `listByDate` so the sync pull path
+ * (which also returns food_log rows) can reuse it. */
 export async function enrichWithMacros(
   rows: FoodLogRow[],
   food: FoodService,
   db: DatabaseService,
+  packagedFood: PackagedFoodService,
 ): Promise<FoodLogEntryWithMacros[]> {
   const indbCodes = [...new Set(rows.filter((row) => row.food_source === "indb").map((row) => row.food_ref))];
   const customFoodIds = [...new Set(rows.filter((row) => row.food_source === "custom").map((row) => row.food_ref))];
+  const packagedFoodIds = [
+    ...new Set(rows.filter((row) => row.food_source === "packaged").map((row) => row.food_ref)),
+  ];
 
   const summaryByCode = await food.getNutrientSummaries(indbCodes);
   const perGramByCustomFoodId = await computeCustomFoodMacrosPerGram(customFoodIds, food, db);
+  const summaryByPackagedFoodId = await packagedFood.getNutrientSummaries(packagedFoodIds);
 
   return rows.map((row) => {
     if (row.food_source === "indb") {
@@ -175,6 +182,25 @@ export async function enrichWithMacros(
       };
     }
 
+    if (row.food_source === "packaged") {
+      const perHundredGrams = summaryByPackagedFoodId.get(row.food_ref);
+      if (!perHundredGrams) {
+        return { ...row, macros: null };
+      }
+      const gramsLogged = Number(row.quantity); // packaged foods: quantity is always grams, same v1 simplification as custom foods
+      const scale = gramsLogged / 100;
+      const scaled = (per100g: number | null) => (per100g === null ? null : Math.round(per100g * scale * 10) / 10);
+      return {
+        ...row,
+        macros: {
+          kcal: scaled(perHundredGrams.kcal),
+          proteinG: scaled(perHundredGrams.proteinG),
+          fatG: scaled(perHundredGrams.fatG),
+          carbG: scaled(perHundredGrams.carbG),
+        },
+      };
+    }
+
     return { ...row, macros: null };
   });
 }
@@ -184,6 +210,7 @@ export class FoodLogService {
   constructor(
     private readonly db: DatabaseService,
     private readonly food: FoodService,
+    private readonly packagedFood: PackagedFoodService,
   ) {}
 
   async create(accountId: string, input: CreateFoodLogRequest): Promise<FoodLogRow> {
@@ -219,7 +246,7 @@ export class FoodLogService {
       [accountId, start, end],
     );
 
-    return enrichWithMacros(result.rows, this.food, this.db);
+    return enrichWithMacros(result.rows, this.food, this.db, this.packagedFood);
   }
 
   async update(accountId: string, id: string, patch: UpdateFoodLogRequest): Promise<FoodLogRow> {

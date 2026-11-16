@@ -3,21 +3,25 @@ import { Test } from "@nestjs/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseService } from "../database/database.service.js";
 import { FoodService } from "../food/food.service.js";
+import { PackagedFoodService } from "../packaged-food/packaged-food.service.js";
 import { FoodLogService } from "./food-log.service.js";
 
 describe("FoodLogService", () => {
   let db: { query: ReturnType<typeof vi.fn> };
   let food: { getNutrientSummaries: ReturnType<typeof vi.fn> };
+  let packagedFood: { getNutrientSummaries: ReturnType<typeof vi.fn> };
   let service: FoodLogService;
 
   beforeEach(async () => {
     db = { query: vi.fn() };
     food = { getNutrientSummaries: vi.fn().mockResolvedValue(new Map()) };
+    packagedFood = { getNutrientSummaries: vi.fn().mockResolvedValue(new Map()) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         FoodLogService,
         { provide: DatabaseService, useValue: db },
         { provide: FoodService, useValue: food },
+        { provide: PackagedFoodService, useValue: packagedFood },
       ],
     }).compile();
     service = moduleRef.get(FoodLogService);
@@ -101,6 +105,30 @@ describe("FoodLogService", () => {
       const [entry] = await service.listByDate("account-1", "2026-11-14");
 
       expect(entry.macros).toBeNull();
+    });
+
+    it("computes macros for a packaged-food entry (quantity always in grams)", async () => {
+      db.query.mockResolvedValue({
+        rows: [
+          {
+            id: "log-1",
+            account_id: "account-1",
+            food_source: "packaged",
+            food_ref: "packaged-food-1",
+            quantity: "50",
+            unit: "g",
+            meal_type: "snack",
+          },
+        ],
+      });
+      packagedFood.getNutrientSummaries.mockResolvedValue(
+        new Map([["packaged-food-1", { kcal: 500, proteinG: 10, fatG: 20, carbG: 60 }]]),
+      );
+
+      const [entry] = await service.listByDate("account-1", "2026-11-14");
+
+      expect(packagedFood.getNutrientSummaries).toHaveBeenCalledWith(["packaged-food-1"]);
+      expect(entry.macros).toEqual({ kcal: 250, proteinG: 5, fatG: 10, carbG: 30 });
     });
 
     it("computes macros for a custom-food entry from its indb-sourced ingredients", async () => {

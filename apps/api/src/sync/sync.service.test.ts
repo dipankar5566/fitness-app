@@ -2,6 +2,7 @@ import { Test } from "@nestjs/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseService } from "../database/database.service.js";
 import { FoodService } from "../food/food.service.js";
+import { PackagedFoodService } from "../packaged-food/packaged-food.service.js";
 import { SyncService } from "./sync.service.js";
 
 const validUpsertRow = {
@@ -23,6 +24,7 @@ describe("SyncService", () => {
   let client: { query: ReturnType<typeof vi.fn> };
   let db: { query: ReturnType<typeof vi.fn>; transaction: ReturnType<typeof vi.fn> };
   let food: { getNutrientSummaries: ReturnType<typeof vi.fn> };
+  let packagedFood: { getNutrientSummaries: ReturnType<typeof vi.fn> };
   let service: SyncService;
 
   beforeEach(async () => {
@@ -32,11 +34,13 @@ describe("SyncService", () => {
       transaction: vi.fn(async (fn: (c: typeof client) => Promise<unknown>) => fn(client)),
     };
     food = { getNutrientSummaries: vi.fn().mockResolvedValue(new Map()) };
+    packagedFood = { getNutrientSummaries: vi.fn().mockResolvedValue(new Map()) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         SyncService,
         { provide: DatabaseService, useValue: db },
         { provide: FoodService, useValue: food },
+        { provide: PackagedFoodService, useValue: packagedFood },
       ],
     }).compile();
     service = moduleRef.get(SyncService);

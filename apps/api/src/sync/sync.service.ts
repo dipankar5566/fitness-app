@@ -19,6 +19,7 @@ import { z, ZodError, type ZodTypeAny } from "zod";
 import { DatabaseService } from "../database/database.service.js";
 import { enrichWithMacros, type FoodLogRow } from "../food-log/food-log.service.js";
 import { FoodService } from "../food/food.service.js";
+import { PackagedFoodService } from "../packaged-food/packaged-food.service.js";
 
 interface DeleteRow {
   id: string;
@@ -229,6 +230,7 @@ export class SyncService {
   constructor(
     private readonly db: DatabaseService,
     private readonly food: FoodService,
+    private readonly packagedFood: PackagedFoodService,
   ) {}
 
   async push(accountId: string, request: SyncPushRequest): Promise<SyncPushResponse> {
@@ -321,7 +323,7 @@ export class SyncService {
 
       const rows =
         table === "food_log"
-          ? await enrichWithMacros(result.rows as unknown as FoodLogRow[], this.food, this.db)
+          ? await enrichWithMacros(result.rows as unknown as FoodLogRow[], this.food, this.db, this.packagedFood)
           : result.rows;
 
       for (const row of rows) {

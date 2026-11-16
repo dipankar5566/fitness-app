@@ -339,6 +339,37 @@ export async function parseMealPhoto(
   return z.array(mealDraftItemSchema).parse(await response.json());
 }
 
+const packagedFoodNutrientsSchema = z.object({
+  energy_kcal: z.number().nullable(),
+  protein_g: z.number().nullable(),
+  fat_g: z.number().nullable(),
+  carb_g: z.number().nullable(),
+  fibre_g: z.number().nullable(),
+});
+
+const packagedFoodDetailSchema = z.object({
+  id: z.string(),
+  barcode: z.string(),
+  name: z.string(),
+  brand: z.string().nullable(),
+  nutrientsPer100g: packagedFoodNutrientsSchema,
+});
+export type PackagedFoodDetail = z.infer<typeof packagedFoodDetailSchema>;
+
+/** Barcode scan -> Open Food Facts lookup (PRD section 5.5). Null means genuinely not found
+ * (the 404 case) - the screen shows a "not found, add it" flow for that, not an error; any other
+ * failure still throws ApiError like every other lookup here. */
+export async function lookupPackagedFood(apiUrl: string, barcode: string): Promise<PackagedFoodDetail | null> {
+  const response = await fetch(`${apiUrl}/packaged-food/${encodeURIComponent(barcode)}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new ApiError(`packaged food lookup failed with status ${response.status}`);
+  }
+  return packagedFoodDetailSchema.parse(await response.json());
+}
+
 export async function pushSync(
   apiUrl: string,
   accessToken: string,

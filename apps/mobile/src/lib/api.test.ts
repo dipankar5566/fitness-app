@@ -9,6 +9,7 @@ import {
   isNetworkError,
   listFoodLog,
   listPrograms,
+  lookupPackagedFood,
   parseMealDraft,
   parseMealPhoto,
   pullSync,
@@ -355,6 +356,49 @@ describe("parseMealPhoto", () => {
     await expect(
       parseMealPhoto("http://localhost:3001", "token-1", { uri: "file:///x.jpg", name: "x.jpg", type: "image/jpeg" }),
     ).rejects.toThrow(ApiError);
+  });
+});
+
+describe("lookupPackagedFood", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches /packaged-food/:barcode and returns the parsed product", async () => {
+    const product = {
+      id: "pf-1",
+      barcode: "5449000054227",
+      name: "Coca-Cola Original Taste",
+      brand: "Coca-Cola",
+      nutrientsPer100g: { energy_kcal: 42, protein_g: 0, fat_g: 0, carb_g: 10.6, fibre_g: 0 },
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(product), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const found = await lookupPackagedFood("http://localhost:3001", "5449000054227");
+
+    expect(found).toEqual(product);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/packaged-food/5449000054227");
+  });
+
+  it("returns null (not an error) when the barcode isn't found", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 404 })),
+    );
+
+    const found = await lookupPackagedFood("http://localhost:3001", "0000000000000");
+
+    expect(found).toBeNull();
+  });
+
+  it("throws ApiError for any other failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 500 })),
+    );
+
+    await expect(lookupPackagedFood("http://localhost:3001", "123")).rejects.toThrow(ApiError);
   });
 });
 

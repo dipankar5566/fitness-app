@@ -212,8 +212,30 @@ database: a real Wikimedia Commons meal photo (dal-roti) correctly parsed to a m
 (`isEstimate: true` as expected), plus missing-auth/missing-file/non-image-file error paths, plus
 unit tests in `apps/api` and `apps/mobile`.
 
-Still to do for M4: barcode scan → Open Food Facts → `packaged_food`, and the AI usage ledger +
-daily quota (`app.ai_usage` - schema already exists from M1).
+Fourth roadmap item done: barcode scan → Open Food Facts lookup → `app.packaged_food`
+(ODbL, kept out of the CC BY/CC0 `indb` tables per `ARCHITECTURE.md` §2/PRD §6 - schema already
+existed from M1). `apps/api/src/packaged-food/`'s `PackagedFoodService.lookupByBarcode` checks
+our own cache (keyed by barcode) first; on a miss it calls the real Open Food Facts v2 API, maps
+`nutriments` into `indb`-style nutrient codes (`energy_kcal`/`protein_g`/`fat_g`/`carb_g`/
+`fibre_g`), and upserts - genuinely not-found returns null, which the client turns into PRD §5.5's
+"not found, add it" flow (reusing the existing `CreateCustomFoodScreen`, not a new "submit to
+packaged_food" UI - that would need moderation tooling `review_status`/`pending` imply but nothing
+in the M4 roadmap bullet asks for). `GET /packaged-food/:barcode` is unauthenticated like
+`/food/search`/`/exercise`: unlike the AI endpoints, an OFF lookup costs nothing per call.
+`FoodLogService.enrichWithMacros` gained a `food_source === "packaged"` branch (quantity always
+grams, same v1 simplification as custom foods) - threaded through both call sites
+(`FoodLogService.listByDate` and `SyncService.pull`), so a packaged-food entry's macros show up
+correctly whether read directly or synced. `apps/mobile`'s new `BarcodeScanScreen`
+(`expo-camera`'s `CameraView`, debounced so a held barcode doesn't retrigger) hands the scanned
+code to `LogPackagedFoodScreen` (mirrors `LogFoodScreen`'s quantity/meal-type/preview UI, grams-only).
+Verified against the real Open Food Facts API + the real `indb` database: a real barcode found via
+OFF's own search API (not guessed), cache-miss-then-hit, a not-found barcode, and a full
+push/pull through `/sync` with correct macro enrichment both ways, plus unit tests in `apps/api`
+and `apps/mobile` (`PackagedFoodService` itself is tested directly, unlike `OpenAiProvider` - this
+is hand-written business logic, not a thin trusted-SDK wrapper).
+
+**All five M4 roadmap items are now done except the AI usage ledger + daily quota**
+(`app.ai_usage` - schema already exists from M1).
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
