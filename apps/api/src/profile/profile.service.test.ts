@@ -25,6 +25,25 @@ describe("ProfileService", () => {
     });
   });
 
+  describe("getLatestWeightKg", () => {
+    it("returns the most recently recorded weight as a number", async () => {
+      db.query.mockResolvedValue({ rows: [{ value: "72.5" }] });
+
+      const result = await service.getLatestWeightKg("account-1");
+
+      expect(result).toBe(72.5);
+      expect(db.query).toHaveBeenCalledWith(expect.stringContaining("FROM app.body_metric"), ["account-1"]);
+    });
+
+    it("returns null when the account has never recorded a weight", async () => {
+      db.query.mockResolvedValue({ rows: [] });
+
+      const result = await service.getLatestWeightKg("account-1");
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe("completeOnboarding", () => {
     it("stores the profile, weight, and computed targets, retiring any previous goal", async () => {
       const profileRow = { account_id: "account-1", sex: "male", dob: "2000-01-15" };

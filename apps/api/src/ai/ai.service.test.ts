@@ -5,12 +5,16 @@ import { AiUsageService } from "./ai-usage.service.js";
 import { AiService } from "./ai.service.js";
 
 describe("AiService", () => {
-  let provider: { parseMealText: ReturnType<typeof vi.fn>; parseMealImage: ReturnType<typeof vi.fn> };
+  let provider: {
+    parseMealText: ReturnType<typeof vi.fn>;
+    parseMealImage: ReturnType<typeof vi.fn>;
+    chat: ReturnType<typeof vi.fn>;
+  };
   let usage: { checkQuota: ReturnType<typeof vi.fn> };
   let service: AiService;
 
   beforeEach(async () => {
-    provider = { parseMealText: vi.fn(), parseMealImage: vi.fn() };
+    provider = { parseMealText: vi.fn(), parseMealImage: vi.fn(), chat: vi.fn() };
     usage = { checkQuota: vi.fn().mockResolvedValue(undefined) };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -51,5 +55,19 @@ describe("AiService", () => {
     await expect(service.parseMealText("account-1", "2 roti")).rejects.toThrow(/limit reached/);
 
     expect(provider.parseMealText).not.toHaveBeenCalled();
+  });
+
+  it("checks the quota, then passes the chat messages through to the configured provider", async () => {
+    provider.chat.mockResolvedValue("You're doing great, keep it up!");
+    const messages = [
+      { role: "system" as const, content: "You are a coach." },
+      { role: "user" as const, content: "How am I doing?" },
+    ];
+
+    const result = await service.chat("account-1", messages);
+
+    expect(usage.checkQuota).toHaveBeenCalledWith("account-1");
+    expect(provider.chat).toHaveBeenCalledWith("account-1", messages);
+    expect(result).toBe("You're doing great, keep it up!");
   });
 });

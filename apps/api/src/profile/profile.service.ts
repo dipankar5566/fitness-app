@@ -62,6 +62,24 @@ export class ProfileService {
   }
 
   /**
+   * Weight isn't stored on app.profile - onboarding (below) records it as an app.body_metric row
+   * instead, since it's something the user re-logs over time. Used by the coach (M5) to
+   * reconstruct UserBiometrics for the calorie-floor safety check. Returns null if the account has
+   * never recorded a weight (hasn't onboarded yet).
+   */
+  async getLatestWeightKg(accountId: string): Promise<number | null> {
+    const result = await this.db.query<{ value: string }>(
+      `SELECT value FROM app.body_metric
+       WHERE account_id = $1 AND metric_type = 'weight_kg'
+       ORDER BY recorded_at DESC
+       LIMIT 1`,
+      [accountId],
+    );
+    const row = result.rows[0];
+    return row ? Number(row.value) : null;
+  }
+
+  /**
    * Onboarding (PRD section 5.1 / ARCHITECTURE.md): upserts the profile, records the starting
    * weight as a body_metric row, retires any previous goal, and stores freshly-computed targets.
    * Targets are computed for a rest day (ARCHITECTURE.md's training_day_adjustment_pct is applied

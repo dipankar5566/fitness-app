@@ -254,6 +254,46 @@ call while a different account's calls kept succeeding (quota is per-account, no
 unit tests in `apps/api` (including `estimateCostUsd`'s pricing math directly, the one piece of
 new hand-written arithmetic worth pinning down on its own).
 
+**M5 (AI coach, Health Connect, reminders) is in progress.** First roadmap item done: coach chat
+grounded in the user's targets/logs, with deterministic, server-enforced safety guardrails.
+`packages/shared/src/coach-safety.ts` holds the pure, directly-unit-tested guardrail logic PRD
+§5.5 requires (`computeCalorieFloor`/`isCalorieTargetSafe` - the higher of "never below BMR" and
+"never more than 25% below TDEE"; `detectEdSignal` - curated regex patterns plus a <800kcal/day
+numeric check, deliberately erring toward false positives since that's the safe failure direction;
+`mentionsMedicalCondition`; `MEDICAL_DISCLAIMER`/`ED_SIGNAL_RESPONSE`/`describeCalorieFloorRefusal`)
+- these exist so the ROADMAP's "refuses 5 scripted unsafe prompts" exit criterion is pinned down by
+real adversarial-prompt unit tests (`coach-safety.test.ts`), not left to hoping the model follows
+its system prompt. `AiProvider` gained a `chat(accountId, messages: ChatMessage[])` method (model
+`gpt-4o`, per PRD §9 - the cheaper `gpt-4o-mini` stays reserved for meal parsing); this required
+turning `openai-provider.ts`'s `estimateCostUsd` from one hardcoded pricing rate into a per-model
+lookup table, since `gpt-4o`'s real per-token cost is materially higher. `apps/api/src/coach/`'s
+`CoachService` is where the guardrails actually get enforced server-side: an eating-disorder
+signal short-circuits before the model is ever called (costs nothing, returns `ED_SIGNAL_RESPONSE`
+directly); otherwise the system prompt is grounded in the account's real targets (`ProfileService`
+- weight comes from `getLatestWeightKg`, a new method, since weight lives in `app.body_metric`, not
+`app.profile`) and today's logged macros (`FoodLogService.listByDate`), and the model's *own reply*
+is scanned afterward for a below-floor calorie suggestion (replaced wholesale with
+`describeCalorieFloorRefusal` if found) and for a missing medical disclaimer when the user
+mentioned a medical condition (appended if absent) - defense-in-depth against the model ignoring
+an instruction, not reliance on it following one. `POST /coach/message` / `GET /coach/messages`
+(`JwtAuthGuard`-protected) persist every turn to the pre-existing `app.chat_message` table; no new
+migration was needed since M1 already created both `app.chat_message` and `app.ai_usage` with
+`'coach_chat'` as a valid `feature` value. Verified end-to-end against the real OpenAI API + the
+real local `indb` database: a pre-onboarding question correctly declined to give numeric advice,
+a post-onboarding question correctly cited the account's real target macros, all 5 scripted unsafe
+prompts handled correctly (3 ED-signal short-circuits that never reached the model, one extreme-
+deficit request where the model itself respected the injected floor, one medical-condition
+question that got the disclaimer appended), and `GET /coach/messages` returned the full
+conversation in correct chronological order - plus unit tests in `packages/shared` (19 adversarial-
+prompt/floor/disclaimer cases) and `apps/api` (`CoachService`'s guardrail-enforcement paths with a
+mocked `AiService`/`ProfileService`/`FoodLogService`/`DatabaseService`).
+
+Still to do for M5: Health Connect read (steps/exercise/weight) + opt-in write; meal/workout
+reminders + logging streak. Mobile UI for coach chat (a `CoachChatScreen` with a visible medical-
+disclaimer banner, wired into `RootNavigator`/`HomeScreen`) is also still pending - this increment
+was server-only, following the same build-the-API-first-then-the-screen cadence used for M3/M4's
+other features.
+
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
 now uses `unplugin-swc` with `decoratorMetadata: true` instead. Verified with `AuthService`'s test
@@ -287,7 +327,9 @@ apps/
                        (push/pull), exercise (library + muscle/equipment filters), program
                        (built-in program library, nested days/exercises), ai (OpenAI-backed
                        text/photo meal parsing via a provider-agnostic gateway interface, usage
-                       ledger + daily quota), packaged-food (barcode scan via Open Food Facts).
+                       ledger + daily quota), packaged-food (barcode scan via Open Food Facts),
+                       coach (AI coach chat grounded in targets/logs, with server-enforced
+                       ED-signal/calorie-floor/medical-disclaimer safety guardrails).
   mobile/              Expo app (TypeScript, SDK 58), React Navigation stack. src/screens/,
                        src/lib/ (api.ts client, analytics.ts, auth-storage.ts, env.ts, db.ts),
                        src/components/ (ChipSelect, a generic enum picker reused across screens).

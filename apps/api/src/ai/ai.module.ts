@@ -17,5 +17,6 @@ import { OpenAiProvider } from "./openai-provider.js";
     AiUsageService,
     { provide: AI_PROVIDER, useClass: OpenAiProvider },
   ],
+  exports: [AiService],
 })
 export class AiModule {}

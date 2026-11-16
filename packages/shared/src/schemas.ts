@@ -202,3 +202,11 @@ export const aiParseMealTextRequestSchema = z.object({
   text: z.string().min(1),
 });
 export type AiParseMealTextRequest = z.infer<typeof aiParseMealTextRequestSchema>;
+
+// AI coach chat — PRD §5.5/ARCHITECTURE.md §5, M5. One user message per request; the server holds
+// the conversation history (app.chat_message) and grounding data, so the client only ever sends
+// the new message text.
+export const coachMessageRequestSchema = z.object({
+  message: z.string().min(1),
+});
+export type CoachMessageRequest = z.infer<typeof coachMessageRequestSchema>;

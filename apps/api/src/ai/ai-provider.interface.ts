@@ -3,18 +3,22 @@
  * (OpenAI chosen, decided per PRD §9's "AI provider(s) & model per task" open question); no
  * feature calls an AI SDK directly (CLAUDE.md "Architecture rules").
  *
- * Deliberately has only parseMealText/parseMealImage so far - ARCHITECTURE.md's full sketch also
- * has chat/generatePlan, but those belong to M5 roadmap items (AI coach, AI-generated plans) that
- * don't exist yet. Adding stub methods ahead of the features that need them would be exactly the
- * kind of half-finished implementation CLAUDE.md asks not to write - extend this interface when
- * each of those is actually built.
+ * Grown one method at a time as each roadmap item is actually built (parseMealText/parseMealImage
+ * for M4; chat for M5's coach) rather than stubbing ARCHITECTURE.md's full sketch (which also has
+ * generatePlan) up front - adding stub methods ahead of the features that need them would be
+ * exactly the kind of half-finished implementation CLAUDE.md asks not to write.
  *
- * Both methods take `accountId` (ARCHITECTURE.md's original sketch had a `ctx: UserContext` here;
+ * All methods take `accountId` (ARCHITECTURE.md's original sketch had a `ctx: UserContext` here;
  * it was dropped when this interface was first written since nothing needed it yet) so the
  * implementation can record real per-call token usage against the right account for the AI usage
  * ledger (app.ai_usage) - recording happens at this layer because it's the one place with the
  * actual token counts from the provider's response, not estimated after the fact.
  */
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
 
 export interface RawMealItem {
   /** As extracted from the text, in whatever language/script the user wrote it (English, Hindi,
@@ -38,4 +42,9 @@ export interface AiProvider {
    * estimate, not a number the user stated - the caller (AiMealDraftService) always flags these
    * items is_estimate for that reason, regardless of whether the food itself matched. */
   parseMealImage(accountId: string, image: Buffer, mimeType: string): Promise<RawMealItem[]>;
+
+  /** One coach-chat turn. `messages` is the full conversation so far (system prompt + history +
+   * the new user message) - the caller (CoachService) owns grounding/safety and builds this list;
+   * the provider's only job is to call the model and return its reply text. */
+  chat(accountId: string, messages: ChatMessage[]): Promise<string>;
 }

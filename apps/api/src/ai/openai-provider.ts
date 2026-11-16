@@ -4,18 +4,25 @@ import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { AiUsageService, type AiFeature } from "./ai-usage.service.js";
-import type { AiProvider, RawMealItem } from "./ai-provider.interface.js";
+import type { AiProvider, ChatMessage, RawMealItem } from "./ai-provider.interface.js";
 
-const MEAL_PARSE_MODEL = "gpt-4o-mini"; // cheap model for parsing; gpt-4o reserved for the M5 coach
+const MEAL_PARSE_MODEL = "gpt-4o-mini"; // cheap model for parsing
+const COACH_CHAT_MODEL = "gpt-4o"; // PRD §9: gpt-4o reserved for the M5 coach
 
-// gpt-4o-mini pricing in USD per 1M tokens, as of choosing this model (PRD §9) - approximate and
-// not re-fetched from OpenAI, used only to estimate app.ai_usage.cost_usd for the daily quota
+// Pricing in USD per 1M tokens, as of choosing these models (PRD §9) - approximate and not
+// re-fetched from OpenAI, used only to estimate app.ai_usage.cost_usd for the daily quota
 // (AiUsageService), not for real billing. Update if OpenAI's published pricing changes materially.
-const INPUT_COST_PER_MILLION_TOKENS = 0.15;
-const OUTPUT_COST_PER_MILLION_TOKENS = 0.6;
+const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
+  "gpt-4o-mini": { inputPerMillion: 0.15, outputPerMillion: 0.6 },
+  "gpt-4o": { inputPerMillion: 2.5, outputPerMillion: 10 },
+};
 
-export function estimateCostUsd(tokensIn: number, tokensOut: number): number {
-  return (tokensIn * INPUT_COST_PER_MILLION_TOKENS + tokensOut * OUTPUT_COST_PER_MILLION_TOKENS) / 1_000_000;
+export function estimateCostUsd(model: string, tokensIn: number, tokensOut: number): number {
+  const pricing = MODEL_PRICING[model];
+  if (!pricing) {
+    throw new Error(`No pricing configured for model "${model}"`);
+  }
+  return (tokensIn * pricing.inputPerMillion + tokensOut * pricing.outputPerMillion) / 1_000_000;
 }
 
 const mealItemsSchema = z.object({
@@ -71,7 +78,7 @@ export class OpenAiProvider implements AiProvider {
     if (!parsed) {
       throw new Error("OpenAI returned no parsed meal items");
     }
-    await this.recordUsage(accountId, "meal_parse_text", completion.usage);
+    await this.recordUsage(accountId, "meal_parse_text", MEAL_PARSE_MODEL, completion.usage);
     return parsed.items;
   }
 
@@ -95,17 +102,32 @@ export class OpenAiProvider implements AiProvider {
     if (!parsed) {
       throw new Error("OpenAI returned no parsed meal items");
     }
-    await this.recordUsage(accountId, "meal_parse_image", completion.usage);
+    await this.recordUsage(accountId, "meal_parse_image", MEAL_PARSE_MODEL, completion.usage);
     return parsed.items;
+  }
+
+  async chat(accountId: string, messages: ChatMessage[]): Promise<string> {
+    const completion = await this.client.chat.completions.create({
+      model: COACH_CHAT_MODEL,
+      messages: messages.map((message) => ({ role: message.role, content: message.content })),
+    });
+
+    const reply = completion.choices[0]?.message.content;
+    if (!reply) {
+      throw new Error("OpenAI returned no chat reply");
+    }
+    await this.recordUsage(accountId, "coach_chat", COACH_CHAT_MODEL, completion.usage);
+    return reply;
   }
 
   private async recordUsage(
     accountId: string,
     feature: AiFeature,
+    model: string,
     usage: { prompt_tokens: number; completion_tokens: number } | null | undefined,
   ): Promise<void> {
     const tokensIn = usage?.prompt_tokens ?? 0;
     const tokensOut = usage?.completion_tokens ?? 0;
-    await this.usage.record(accountId, feature, tokensIn, tokensOut, estimateCostUsd(tokensIn, tokensOut));
+    await this.usage.record(accountId, feature, tokensIn, tokensOut, estimateCostUsd(model, tokensIn, tokensOut));
   }
 }

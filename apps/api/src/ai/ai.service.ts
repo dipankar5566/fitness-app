@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { AI_PROVIDER, type AiProvider, type RawMealItem } from "./ai-provider.interface.js";
+import { AI_PROVIDER, type AiProvider, type ChatMessage, type RawMealItem } from "./ai-provider.interface.js";
 import { AiUsageService } from "./ai-usage.service.js";
 
 @Injectable()
@@ -22,5 +22,10 @@ export class AiService {
   async parseMealImage(accountId: string, image: Buffer, mimeType: string): Promise<RawMealItem[]> {
     await this.usage.checkQuota(accountId);
     return this.provider.parseMealImage(accountId, image, mimeType);
+  }
+
+  async chat(accountId: string, messages: ChatMessage[]): Promise<string> {
+    await this.usage.checkQuota(accountId);
+    return this.provider.chat(accountId, messages);
   }
 }
