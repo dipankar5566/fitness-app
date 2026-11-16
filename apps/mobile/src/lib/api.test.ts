@@ -152,7 +152,9 @@ describe("searchFoods", () => {
   });
 
   it("URL-encodes the query and returns the parsed results", async () => {
-    const results = [{ food_id: 1, code: "ASC144", name: "Idli", food_type: "recipe", score: 1 }];
+    const results = [
+      { food_id: 1, code: "ASC144", name: "Idli", food_type: "recipe", score: 1, dietClass: "vegan" },
+    ];
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(results), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -183,6 +185,8 @@ describe("getFoodDetail", () => {
     foodType: "recipe",
     nutrientsPer100g: { kcal: 137, proteinG: 4.6, fatG: 0.3, carbG: 28.2, fibreG: 2.3 },
     servingMeasures: [{ name: "idli", grams: 25, isDefault: true }],
+    dietClass: "vegan",
+    jainOk: null,
   };
 
   it("returns the parsed food detail", async () => {

@@ -5,6 +5,7 @@ import {
   syncPushRequestSchema,
   syncPushResponseSchema,
   type CreateFoodLogRequest,
+  type DietType,
   type OnboardingRequest,
   type SyncPullResponse,
   type SyncPushRequest,
@@ -105,17 +106,25 @@ export async function submitOnboarding(
   return onboardingResponseSchema.parse(await response.json());
 }
 
+const dietClassSchema = z.enum(["vegan", "veg", "egg", "non_veg"]).nullable();
+
 const foodSearchResultSchema = z.object({
   food_id: z.number(),
   code: z.string(),
   name: z.string(),
   food_type: z.string(),
   score: z.number(),
+  dietClass: dietClassSchema,
 });
 export type FoodSearchResult = z.infer<typeof foodSearchResultSchema>;
 
-export async function searchFoods(apiUrl: string, query: string): Promise<FoodSearchResult[]> {
-  const response = await fetch(`${apiUrl}/food/search?q=${encodeURIComponent(query)}`);
+export async function searchFoods(
+  apiUrl: string,
+  query: string,
+  dietType?: DietType,
+): Promise<FoodSearchResult[]> {
+  const dietTypeParam = dietType ? `&dietType=${encodeURIComponent(dietType)}` : "";
+  const response = await fetch(`${apiUrl}/food/search?q=${encodeURIComponent(query)}${dietTypeParam}`);
   if (!response.ok) {
     throw new ApiError(`food search failed with status ${response.status}`);
   }
@@ -136,6 +145,8 @@ const foodDetailSchema = z.object({
   servingMeasures: z.array(
     z.object({ name: z.string(), grams: z.number().nullable(), isDefault: z.boolean() }),
   ),
+  dietClass: dietClassSchema,
+  jainOk: z.boolean().nullable(),
 });
 export type FoodDetail = z.infer<typeof foodDetailSchema>;
 

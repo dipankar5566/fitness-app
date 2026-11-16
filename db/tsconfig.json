@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["migrate.ts"]
+  "include": ["migrate.ts", "backfill-diet-class.ts"]
 }

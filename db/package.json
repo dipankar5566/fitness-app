@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "migrate": "tsx migrate.ts",
+    "backfill:diet": "tsx backfill-diet-class.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fitness-app/shared": "workspace:*",
     "pg": "^8.13.0"
   },
   "devDependencies": {

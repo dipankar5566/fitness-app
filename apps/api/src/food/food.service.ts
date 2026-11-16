@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { isAllowed, type DietClass, type DietType } from "@fitness-app/shared";
 import { DatabaseService } from "../database/database.service.js";
 
 interface SearchFoodsRow {
@@ -7,6 +8,12 @@ interface SearchFoodsRow {
   name: string;
   food_type: string;
   score: number;
+  dietClass: DietClass | null;
+}
+
+interface DietClassEntry {
+  dietClass: DietClass | null;
+  jainOk: boolean | null;
 }
 
 interface FoodRow {
@@ -48,6 +55,8 @@ export interface FoodDetail {
     fibreG: number | null;
   };
   servingMeasures: { name: string; grams: number | null; isDefault: boolean }[];
+  dietClass: DietClass | null;
+  jainOk: boolean | null;
 }
 
 const NUTRIENT_KEY_BY_CODE: Record<string, keyof FoodDetail["nutrientsPer100g"]> = {
@@ -65,13 +74,47 @@ export class FoodService {
   /**
    * Thin wrapper over indb.search_foods() (db/0001_indb.sql) - fuzzy name search across INDB recipes
    * and ingredients, already multilingual-ready via food_name (ARCHITECTURE.md section 6).
+   *
+   * When `dietType` is given, over-fetches from search_foods() (it has no diet awareness - that
+   * lives in app.food_diet_class, a separate app-owned table, never a column on public.food - see
+   * 0005_food_diet_class.sql) and filters in application code. A food with no classification row
+   * is "unverified", not excluded - it's always included (see isAllowed's docstring).
    */
-  async search(q: string, limit: number): Promise<SearchFoodsRow[]> {
-    const result = await this.db.query<SearchFoodsRow>("SELECT * FROM search_foods($1, $2)", [
-      q,
-      limit,
-    ]);
-    return result.rows;
+  async search(q: string, limit: number, dietType?: DietType): Promise<SearchFoodsRow[]> {
+    const overFetchLimit = dietType ? Math.min(limit * 4, 200) : limit;
+    const result = await this.db.query<Omit<SearchFoodsRow, "dietClass">>(
+      "SELECT * FROM search_foods($1, $2)",
+      [q, overFetchLimit],
+    );
+
+    const dietClassByCode = await this.getDietClasses(result.rows.map((row) => row.code));
+    const withDietClass: SearchFoodsRow[] = result.rows.map((row) => ({
+      ...row,
+      dietClass: dietClassByCode.get(row.code)?.dietClass ?? null,
+    }));
+
+    if (!dietType) {
+      return withDietClass.slice(0, limit);
+    }
+
+    const filtered = withDietClass.filter((row) => {
+      const entry = dietClassByCode.get(row.code);
+      return isAllowed(dietType, entry?.dietClass ?? null, entry?.jainOk ?? null);
+    });
+    return filtered.slice(0, limit);
+  }
+
+  private async getDietClasses(codes: string[]): Promise<Map<string, DietClassEntry>> {
+    if (codes.length === 0) {
+      return new Map();
+    }
+    const result = await this.db.query<{ food_code: string; diet_class: DietClass | null; jain_ok: boolean | null }>(
+      "SELECT food_code, diet_class, jain_ok FROM app.food_diet_class WHERE food_code = ANY($1)",
+      [codes],
+    );
+    return new Map(
+      result.rows.map((row) => [row.food_code, { dietClass: row.diet_class, jainOk: row.jain_ok }]),
+    );
   }
 
   /**
@@ -88,7 +131,7 @@ export class FoodService {
       return null;
     }
 
-    const [nutrientResult, servingResult] = await Promise.all([
+    const [nutrientResult, servingResult, dietClassByCode] = await Promise.all([
       this.db.query<FoodNutrientRow>(
         `SELECT n.code AS nutrient_code, fn.per_100g, fn.per_serving
          FROM food_nutrient fn JOIN nutrient n ON n.id = fn.nutrient_id
@@ -99,7 +142,9 @@ export class FoodService {
         "SELECT name, grams, is_default FROM serving_measure WHERE food_id = $1",
         [food.id],
       ),
+      this.getDietClasses([food.code]),
     ]);
+    const dietClassEntry = dietClassByCode.get(food.code);
 
     const nutrientsPer100g: FoodDetail["nutrientsPer100g"] = {
       kcal: null,
@@ -125,6 +170,8 @@ export class FoodService {
         grams: row.grams === null ? null : Number(row.grams),
         isDefault: row.is_default,
       })),
+      dietClass: dietClassEntry?.dietClass ?? null,
+      jainOk: dietClassEntry?.jainOk ?? null,
     };
   }
 

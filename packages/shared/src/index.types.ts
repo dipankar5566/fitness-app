@@ -4,3 +4,4 @@
 // TS runtime.
 export * from "./targets.js";
 export * from "./schemas.js";
+export * from "./diet.js";

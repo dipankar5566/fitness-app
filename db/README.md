@@ -14,6 +14,12 @@ is a verbatim copy of `../indb/schema.sql`, per ARCHITECTURE.md).
 - `0003_sync_cursor.sql` — adds `server_updated_at` to every syncable table, used only as the
   `GET /sync?since=` pull cursor (ARCHITECTURE.md section 3) - separate from the client-set
   `updated_at` that drives last-write-wins.
+- `0004_custom_food_sync.sql` — gives `app.custom_food`/`app.custom_food_ingredient` the same
+  syncable shape as `food_log`, so custom foods/recipes go through `/sync` too.
+- `0005_food_diet_class.sql` — `app.food_diet_class`: a heuristic veg/non-veg/egg/vegan + Jain
+  classification keyed by `food_code`, backfilled by `backfill-diet-class.ts` (`pnpm backfill:diet`).
+  Deliberately not a column on `public.food` - that schema is read-only from app code and gets
+  truncated/reloaded by `indb/load.py`.
 
 ## Two supported setups
 1. **Reuse the existing local `indb` database** (fastest for development; already has real recipe

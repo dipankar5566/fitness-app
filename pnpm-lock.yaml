@@ -303,6 +303,9 @@ importers:
 
   db:
     dependencies:
+      '@fitness-app/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
       pg:
         specifier: ^8.13.0
         version: 8.23.1

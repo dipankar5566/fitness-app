@@ -11,8 +11,8 @@ Navigation, guest-auth flow persisted via `expo-secure-store`, `expo-sqlite` wir
 crash reporting + lightweight analytics are wired via Sentry (`src/lib/analytics.ts` - a no-op
 until `EXPO_PUBLIC_SENTRY_DSN` is set, no PII/health values ever sent, PRD section 7).
 
-**M2 (Nutrition core) is in progress.** Done so far, each verified end-to-end against the real
-local Postgres `indb` database (not just unit tests):
+**M2 (Nutrition core) is complete.** Done, each verified end-to-end against the real local
+Postgres `indb` database (not just unit tests):
 - Onboarding + target calculation: `PUT`/`GET /profile` (`apps/api/src/profile/`) computes and
   stores macro targets via `packages/shared`'s formulas; `apps/mobile`'s `OnboardingScreen` feeds
   it and `HomeScreen` displays the result.
@@ -50,10 +50,24 @@ local Postgres `indb` database (not just unit tests):
   computed macros match hand-calculated values from the ingredient's per-100g nutrients) plus unit
   tests in both apps.
 
-**Still open in M2** (`docs/ROADMAP.md`): diet-type filtering - **blocked**, the `indb` schema
-(`db/migrations/0001_indb.sql`) carries no veg/non-veg/vegan metadata on `food`/`food_name`, so
-this needs a data-model addition (new column + backfill) before it's implementable, not just UI
-work.
+- Diet-type filtering: `app.food_diet_class` (`0005_food_diet_class.sql`) holds a heuristic
+  veg/vegan/egg/non_veg + Jain-suitability classification per `indb` food code - **deliberately not
+  a column on `public.food`**, since that schema is read-only from app code and `indb/load.py`
+  truncates/reloads it on every reload. Backfilled by `db/backfill-diet-class.ts`
+  (`pnpm backfill:diet`, re-runnable) using the pure classifier in `packages/shared/src/diet.ts`
+  (`classifyFood`/`allowedDietClasses`/`isAllowed`) - for a recipe it reads not just the dish name
+  but every `recipe_ingredient` line, which is what correctly classifies e.g. "Chicken biryani" as
+  `non_veg`. A food with no classification signal comes back `null` ("unverified"), never excluded
+  by a guess. `GET /food/search` takes an optional `dietType` query param (`FoodService.search`
+  over-fetches from `search_foods()` then filters in application code, since the Postgres function
+  itself has no diet awareness); `apps/mobile`'s `FoodSearchScreen` reads the diet type from the
+  cached profile and applies the same filter to its offline recent-foods fallback. Verified
+  end-to-end via curl (`chicken`/`biryani` searches filtered by `dietType=veg` vs `non_veg`) and a
+  psql spot-check of the backfill's classification output, plus unit tests in both `apps/api` and
+  `packages/shared`.
+
+All three M2 roadmap items (`docs/ROADMAP.md`) - diet-type filtering, custom foods/recipes,
+offline logging + `/sync` v1 - are done.
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
