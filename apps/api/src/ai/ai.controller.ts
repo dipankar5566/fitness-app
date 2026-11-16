@@ -3,12 +3,14 @@ import {
   Body,
   Controller,
   Post,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { aiParseMealTextRequestSchema } from "@fitness-app/shared";
+import type { Request } from "express";
 import { memoryStorage } from "multer";
 import { ZodError } from "zod";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
@@ -33,10 +35,10 @@ export class AiController {
    * this can't be an open endpoint the way /food/search or /exercise are.
    */
   @Post("meal/parse-text")
-  async parseMealText(@Body() body: unknown) {
+  async parseMealText(@Req() req: Request, @Body() body: unknown) {
     try {
       const { text } = aiParseMealTextRequestSchema.parse(body);
-      return await this.ai.parseMealText(text);
+      return await this.ai.parseMealText(req.accountId!, text);
     } catch (error) {
       if (error instanceof ZodError) {
         throw new BadRequestException(error.issues);
@@ -51,10 +53,10 @@ export class AiController {
    * item through the existing POST /food-log with source: "ai_text" - no new log-writing code.
    */
   @Post("meal/parse")
-  async parseMealDraft(@Body() body: unknown) {
+  async parseMealDraft(@Req() req: Request, @Body() body: unknown) {
     try {
       const { text } = aiParseMealTextRequestSchema.parse(body);
-      return await this.mealDraft.resolveDraft(text);
+      return await this.mealDraft.resolveDraft(req.accountId!, text);
     } catch (error) {
       if (error instanceof ZodError) {
         throw new BadRequestException(error.issues);
@@ -70,13 +72,13 @@ export class AiController {
    */
   @Post("meal/parse-photo")
   @UseInterceptors(FileInterceptor("photo", { storage: memoryStorage(), limits: { fileSize: MAX_PHOTO_BYTES } }))
-  async parseMealPhoto(@UploadedFile() file?: Express.Multer.File) {
+  async parseMealPhoto(@Req() req: Request, @UploadedFile() file?: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException("Missing 'photo' file");
     }
     if (!file.mimetype.startsWith("image/")) {
       throw new BadRequestException("File must be an image");
     }
-    return this.mealDraft.resolveDraftFromImage(file.buffer, file.mimetype);
+    return this.mealDraft.resolveDraftFromImage(req.accountId!, file.buffer, file.mimetype);
   }
 }

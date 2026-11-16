@@ -157,7 +157,7 @@ database: curl `GET /program` (4 programs, correct nested days/exercises), a ful
 `workout_session` with a real `program_day_id` through `/sync` (FK holds), psql spot-check, plus
 unit tests in `apps/api`, `apps/mobile`, and `packages/shared`.
 
-**M4 (AI meal logging + barcode) is in progress.** First roadmap item done: AI gateway interface +
+**M4 (AI meal logging + barcode) is complete.** First roadmap item: AI gateway interface +
 chosen provider wired. AI provider decided: **OpenAI** (PRD §9's tracked open question, now
 closed) - `gpt-4o-mini` for parsing, `gpt-4o` reserved for the M5 coach. `apps/api/src/ai/`:
 `AiProvider` (`ai-provider.interface.ts`) deliberately has only `parseMealText` for now -
@@ -234,8 +234,25 @@ push/pull through `/sync` with correct macro enrichment both ways, plus unit tes
 and `apps/mobile` (`PackagedFoodService` itself is tested directly, unlike `OpenAiProvider` - this
 is hand-written business logic, not a thin trusted-SDK wrapper).
 
-**All five M4 roadmap items are now done except the AI usage ledger + daily quota**
-(`app.ai_usage` - schema already exists from M1).
+Fifth roadmap item done: AI usage ledger + daily quota - **all of M4 is now done.**
+`apps/api/src/ai/ai-usage.service.ts`'s `AiUsageService` is the home for both halves
+(`AiService`'s own docstring anticipated this exact file before it existed, back when M4's first
+item was built). `checkQuota` runs in `AiService` **before** the provider is ever called, so a
+blocked request costs nothing real; `record` runs inside `OpenAiProvider` **after** a successful
+response, since that's the only layer with the real `completion.usage` token counts - cost is
+estimated from `gpt-4o-mini`'s published per-token pricing (a documented, tunable approximation,
+not real billing data). The daily cap (`$0.10`/account) is a runaway/abuse safety guard, not a
+tight match to PRD §8's "AI cost per MAU ≤ ₹15" - that figure is a to-be-validated *monthly
+average across all monthly active users*, not a per-account daily ceiling, so equating the two
+would be a category error; the actual threshold is a tunable constant, not hardcoded into the
+enforcement logic. `AiProvider`'s interface gained `accountId` on both methods - restoring the
+`ctx: UserContext` parameter ARCHITECTURE.md §5's original sketch always had, dropped earlier
+only because nothing needed it yet. Verified against the real OpenAI API + the real `indb`
+database: a real call recorded a real token count and cost in `app.ai_usage` (psql-confirmed),
+then manually pushing that account's ledger over the threshold produced a real `403` on the next
+call while a different account's calls kept succeeding (quota is per-account, not global), plus
+unit tests in `apps/api` (including `estimateCostUsd`'s pricing math directly, the one piece of
+new hand-written arithmetic worth pinning down on its own).
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
@@ -269,7 +286,8 @@ apps/
                        food-log (manual meal log CRUD), profile (onboarding + targets), sync
                        (push/pull), exercise (library + muscle/equipment filters), program
                        (built-in program library, nested days/exercises), ai (OpenAI-backed
-                       meal-text parsing via a provider-agnostic gateway interface).
+                       text/photo meal parsing via a provider-agnostic gateway interface, usage
+                       ledger + daily quota), packaged-food (barcode scan via Open Food Facts).
   mobile/              Expo app (TypeScript, SDK 58), React Navigation stack. src/screens/,
                        src/lib/ (api.ts client, analytics.ts, auth-storage.ts, env.ts, db.ts),
                        src/components/ (ChipSelect, a generic enum picker reused across screens).

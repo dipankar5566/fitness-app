@@ -35,8 +35,8 @@ export class AiMealDraftService {
    * never flagged is_estimate (its quantity may still need editing, but the AI gateway's own
    * uncertainty was about which food this is, not the number); an unmatched one always is.
    */
-  async resolveDraft(text: string): Promise<MealDraftItem[]> {
-    const rawItems = await this.ai.parseMealText(text);
+  async resolveDraft(accountId: string, text: string): Promise<MealDraftItem[]> {
+    const rawItems = await this.ai.parseMealText(accountId, text);
     return this.resolveItems(rawItems, false);
   }
 
@@ -45,8 +45,8 @@ export class AiMealDraftService {
    * a photo gives a visual portion estimate, never a number the user actually stated, so the
    * quantity itself is always approximate here regardless of whether the food matched.
    */
-  async resolveDraftFromImage(image: Buffer, mimeType: string): Promise<MealDraftItem[]> {
-    const rawItems = await this.ai.parseMealImage(image, mimeType);
+  async resolveDraftFromImage(accountId: string, image: Buffer, mimeType: string): Promise<MealDraftItem[]> {
+    const rawItems = await this.ai.parseMealImage(accountId, image, mimeType);
     return this.resolveItems(rawItems, true);
   }
 

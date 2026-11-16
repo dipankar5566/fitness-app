@@ -28,8 +28,9 @@ describe("AiMealDraftService", () => {
       { food_id: 1, code: "L002", name: "Roti", food_type: "recipe", score: 0.9, dietClass: "veg" },
     ]);
 
-    const result = await service.resolveDraft("2 roti");
+    const result = await service.resolveDraft("account-1", "2 roti");
 
+    expect(ai.parseMealText).toHaveBeenCalledWith("account-1", "2 roti");
     expect(food.search).toHaveBeenCalledWith("roti", 1);
     expect(result).toEqual([
       {
@@ -50,7 +51,7 @@ describe("AiMealDraftService", () => {
     ai.parseMealText.mockResolvedValue([{ name: "xyz-nonsense-food", quantity: 1, unit: "piece" }]);
     food.search.mockResolvedValue([]);
 
-    const result = await service.resolveDraft("xyz-nonsense-food");
+    const result = await service.resolveDraft("account-1", "xyz-nonsense-food");
 
     expect(result).toEqual([
       {
@@ -76,7 +77,7 @@ describe("AiMealDraftService", () => {
       .mockResolvedValueOnce([{ food_id: 1, code: "L002", name: "Roti", food_type: "recipe", score: 0.9, dietClass: "veg" }])
       .mockResolvedValueOnce([]);
 
-    const result = await service.resolveDraft("2 roti aur dal");
+    const result = await service.resolveDraft("account-1", "2 roti aur dal");
 
     expect(result).toHaveLength(2);
     expect(result[0].foodRef).toBe("L002");
@@ -90,9 +91,9 @@ describe("AiMealDraftService", () => {
       { food_id: 2, code: "L010", name: "Rice", food_type: "ingredient", score: 0.95, dietClass: "vegan" },
     ]);
 
-    const result = await service.resolveDraftFromImage(image, "image/jpeg");
+    const result = await service.resolveDraftFromImage("account-1", image, "image/jpeg");
 
-    expect(ai.parseMealImage).toHaveBeenCalledWith(image, "image/jpeg");
+    expect(ai.parseMealImage).toHaveBeenCalledWith("account-1", image, "image/jpeg");
     expect(result).toEqual([
       {
         rawName: "rice",
@@ -112,7 +113,7 @@ describe("AiMealDraftService", () => {
     ai.parseMealImage.mockResolvedValue([{ name: "mystery-dish", quantity: 1, unit: "plate" }]);
     food.search.mockResolvedValue([]);
 
-    const result = await service.resolveDraftFromImage(Buffer.from("x"), "image/png");
+    const result = await service.resolveDraftFromImage("account-1", Buffer.from("x"), "image/png");
 
     expect(result[0].foodRef).toBeNull();
     expect(result[0].isEstimate).toBe(true);

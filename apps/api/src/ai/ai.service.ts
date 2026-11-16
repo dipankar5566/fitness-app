@@ -1,20 +1,26 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { AI_PROVIDER, type AiProvider, type RawMealItem } from "./ai-provider.interface.js";
+import { AiUsageService } from "./ai-usage.service.js";
 
 @Injectable()
 export class AiService {
-  constructor(@Inject(AI_PROVIDER) private readonly provider: AiProvider) {}
+  constructor(
+    @Inject(AI_PROVIDER) private readonly provider: AiProvider,
+    private readonly usage: AiUsageService,
+  ) {}
 
   /**
-   * Thin pass-through to the configured AiProvider for now - the home for per-account usage
-   * logging/quota enforcement (app.ai_usage) once that roadmap item exists, same way other
-   * services sit between a controller and whatever they depend on.
+   * Checks the daily quota before ever calling the provider - a blocked request costs nothing.
+   * The provider itself records real per-call token usage after a successful response (it's the
+   * only layer with the actual numbers), so usage.record lives there, not here.
    */
-  async parseMealText(text: string): Promise<RawMealItem[]> {
-    return this.provider.parseMealText(text);
+  async parseMealText(accountId: string, text: string): Promise<RawMealItem[]> {
+    await this.usage.checkQuota(accountId);
+    return this.provider.parseMealText(accountId, text);
   }
 
-  async parseMealImage(image: Buffer, mimeType: string): Promise<RawMealItem[]> {
-    return this.provider.parseMealImage(image, mimeType);
+  async parseMealImage(accountId: string, image: Buffer, mimeType: string): Promise<RawMealItem[]> {
+    await this.usage.checkQuota(accountId);
+    return this.provider.parseMealImage(accountId, image, mimeType);
   }
 }
