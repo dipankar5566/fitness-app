@@ -2,27 +2,33 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Button, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import {
-  deleteFoodLog,
-  getProfile,
-  listFoodLog,
-  type FoodLogEntryRow,
-  type GetProfileResponse,
-} from "../lib/api";
+import { getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
+import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
+import { listByLocalDay, softDelete, type LocalFoodLogRow } from "../lib/food-log-repo";
+import { getKv, setKv } from "../lib/kv-store";
+import type { SqlDb } from "../lib/sql-db";
+import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
+
+const CACHED_GOAL_KEY = "cached_goal";
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 export function HomeScreen({ navigation, route }: Props) {
+  const { accountId } = route.params;
   const [goal, setGoal] = useState<GetProfileResponse["goal"] | null>(null);
-  const [entries, setEntries] = useState<FoodLogEntryRow[]>([]);
+  const [entries, setEntries] = useState<LocalFoodLogRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const loadEntries = useCallback(async (db: SqlDb) => {
+    setEntries(await listByLocalDay(db, accountId, todayDate()));
+  }, [accountId]);
 
   const refresh = useCallback(async () => {
     const session = await loadGuestSession();
@@ -30,14 +36,27 @@ export function HomeScreen({ navigation, route }: Props) {
       return;
     }
     setIsLoading(true);
-    const [{ goal: activeGoal }, logEntries] = await Promise.all([
-      getProfile(API_URL, session.accessToken),
-      listFoodLog(API_URL, session.accessToken, todayDate()),
-    ]);
-    setGoal(activeGoal);
-    setEntries(logEntries);
+    const db = await getDatabase();
+
+    // Local rows render immediately (works offline); syncing then re-reads to pick up any server
+    // changes (e.g. from another device) once the sync has actually happened.
+    await loadEntries(db);
+    void syncNow(db, API_URL, session.accessToken).then(() => loadEntries(db));
+
+    try {
+      const { goal: activeGoal } = await getProfile(API_URL, session.accessToken);
+      setGoal(activeGoal);
+      await setKv(db, CACHED_GOAL_KEY, JSON.stringify(activeGoal));
+    } catch (err) {
+      if (!isNetworkError(err)) {
+        throw err;
+      }
+      const cached = await getKv(db, CACHED_GOAL_KEY);
+      setGoal(cached ? (JSON.parse(cached) as GetProfileResponse["goal"]) : null);
+    }
+
     setIsLoading(false);
-  }, []);
+  }, [loadEntries]);
 
   useFocusEffect(
     useCallback(() => {
@@ -51,10 +70,12 @@ export function HomeScreen({ navigation, route }: Props) {
       if (!session) {
         return;
       }
-      await deleteFoodLog(API_URL, session.accessToken, id);
-      await refresh();
+      const db = await getDatabase();
+      await softDelete(db, id, new Date().toISOString());
+      await loadEntries(db);
+      void syncNow(db, API_URL, session.accessToken);
     },
-    [refresh],
+    [loadEntries],
   );
 
   const totalKcal = entries.reduce((sum, entry) => sum + (entry.macros?.kcal ?? 0), 0);
@@ -67,7 +88,7 @@ export function HomeScreen({ navigation, route }: Props) {
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View style={styles.header}>
-          <Text style={styles.id}>{route.params.accountId}</Text>
+          <Text style={styles.id}>{accountId}</Text>
           {goal ? (
             <View style={styles.targets}>
               <Text style={styles.targetsTitle}>Daily target: {goal.target_kcal} kcal</Text>
@@ -80,12 +101,7 @@ export function HomeScreen({ navigation, route }: Props) {
             <ActivityIndicator />
           )}
           <View style={styles.logButton}>
-            <Button
-              title="Log food"
-              onPress={() =>
-                navigation.navigate("FoodSearch", { accountId: route.params.accountId })
-              }
-            />
+            <Button title="Log food" onPress={() => navigation.navigate("FoodSearch", { accountId })} />
           </View>
           {!isLoading && entries.length === 0 ? (
             <Text style={styles.empty}>Nothing logged today yet.</Text>
@@ -95,7 +111,7 @@ export function HomeScreen({ navigation, route }: Props) {
       renderItem={({ item }) => (
         <View style={styles.entryRow}>
           <View style={styles.entryInfo}>
-            <Text style={styles.entryMeal}>{item.meal_type}</Text>
+            <Text style={styles.entryMeal}>{item.mealType}</Text>
             <Text>
               {item.quantity} {item.unit} · {item.macros?.kcal ?? "?"} kcal
             </Text>

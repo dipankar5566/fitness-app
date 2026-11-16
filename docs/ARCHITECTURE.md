@@ -67,6 +67,11 @@ infra/           Dockerfile(s), docker-compose.yml (postgres + api), CI config
   for a `GET /sync?since=<token>` pull.
 - Conflict rule: last-write-wins on `updated_at`, with the *push-in-flight* exception above. Simpler than the
   legacy/unified split seen in the teardown — one protocol, used for every table.
+- **Implemented (v1, `food_log` only — see CLAUDE.md "Current status"):** the `GET /sync?since=` cursor is a
+  separate server-set `server_updated_at` column, not `updated_at`. `updated_at` is client-set and drives
+  last-write-wins, so a device can legitimately push an edit with an old `updated_at` long after reconnecting
+  — using it as the pull cursor would make that edit invisible to a pull that already ran past that timestamp.
+  `server_updated_at` is set by the server on every push and only ever used for the pull cursor.
 
 ## 4. API surface (NestJS modules, REST + OpenAPI via `@nestjs/swagger`)
 `auth` (guest issue, OTP, Google, email/password, link-guest-to-account merge) · `profile` · `targets`

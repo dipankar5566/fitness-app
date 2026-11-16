@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Pool, type QueryResultRow } from "pg";
+import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 /**
  * Thin wrapper around a pg Pool. Deliberately not an ORM: the indb schema (apps/api does not own it,
@@ -20,6 +20,23 @@ export class DatabaseService implements OnModuleDestroy {
 
   query<T extends QueryResultRow = QueryResultRow>(text: string, params?: unknown[]) {
     return this.pool.query<T>(text, params);
+  }
+
+  /** Runs `fn` against a single client inside BEGIN/COMMIT, ROLLBACK on throw. For a sync push that
+   * must apply a batch of rows atomically - callers use `client.query`, not `this.query`. */
+  async transaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await fn(client);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async onModuleDestroy() {

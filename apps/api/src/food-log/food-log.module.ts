@@ -8,5 +8,6 @@ import { FoodLogService } from "./food-log.service.js";
   imports: [AuthModule, FoodModule],
   controllers: [FoodLogController],
   providers: [FoodLogService],
+  exports: [FoodLogService],
 })
 export class FoodLogModule {}

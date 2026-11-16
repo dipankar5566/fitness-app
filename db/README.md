@@ -11,6 +11,9 @@ is a verbatim copy of `../indb/schema.sql`, per ARCHITECTURE.md).
 - `0002_app_schema.sql` — new `app` schema: accounts, profile, goals, food_log, packaged_food, custom
   foods, workouts/exercises/programs, body metrics, streaks, reminders, chat, AI usage ledger, consent
   records (ARCHITECTURE.md section 2).
+- `0003_sync_cursor.sql` — adds `server_updated_at` to every syncable table, used only as the
+  `GET /sync?since=` pull cursor (ARCHITECTURE.md section 3) - separate from the client-set
+  `updated_at` that drives last-write-wins.
 
 ## Two supported setups
 1. **Reuse the existing local `indb` database** (fastest for development; already has real recipe

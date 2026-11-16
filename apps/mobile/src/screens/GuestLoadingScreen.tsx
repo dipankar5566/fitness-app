@@ -2,23 +2,47 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Button, StyleSheet, Text, View } from "react-native";
 import { identifyGuest, trackEvent } from "../lib/analytics";
-import { createGuestAccount, getProfile } from "../lib/api";
+import { createGuestAccount, getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
 import { loadGuestSession, saveGuestSession } from "../lib/auth-storage";
+import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
+import { getKv, setKv } from "../lib/kv-store";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "GuestLoading">;
+
+const CACHED_PROFILE_KEY = "cached_profile";
 
 export function GuestLoadingScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const routeToNextScreen = useCallback(
     async (accountId: string, accessToken: string) => {
-      const { profile } = await getProfile(API_URL, accessToken);
-      if (profile) {
-        navigation.replace("Home", { accountId });
-      } else {
-        navigation.replace("Onboarding", { accountId });
+      const db = await getDatabase();
+      try {
+        const { profile } = await getProfile(API_URL, accessToken);
+        await setKv(db, CACHED_PROFILE_KEY, JSON.stringify(profile));
+        if (profile) {
+          navigation.replace("Home", { accountId });
+        } else {
+          navigation.replace("Onboarding", { accountId });
+        }
+      } catch (err) {
+        if (!isNetworkError(err)) {
+          throw err;
+        }
+        // Offline cold start: a returning user with a cached profile goes straight to Home - it
+        // refreshes itself in the background once there, same as any other focus of that screen.
+        const cached = await getKv(db, CACHED_PROFILE_KEY);
+        if (!cached) {
+          throw err;
+        }
+        const profile = JSON.parse(cached) as GetProfileResponse["profile"];
+        if (profile) {
+          navigation.replace("Home", { accountId });
+        } else {
+          navigation.replace("Onboarding", { accountId });
+        }
       }
     },
     [navigation],

@@ -6,7 +6,10 @@ import {
   deleteFoodLog,
   getFoodDetail,
   getProfile,
+  isNetworkError,
   listFoodLog,
+  pullSync,
+  pushSync,
   searchFoods,
   submitOnboarding,
 } from "./api";
@@ -279,5 +282,81 @@ describe("food-log client", () => {
     await expect(deleteFoodLog("http://localhost:3001", "token-1", "log-1")).rejects.toThrow(
       ApiError,
     );
+  });
+});
+
+describe("sync client", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("pushSync POSTs the envelope and returns the parsed applied/rejected lists", async () => {
+    const response = { applied: ["a"], rejected: [] };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = {
+      syncToken: null,
+      rows: [
+        {
+          table: "food_log" as const,
+          op: "upsert" as const,
+          row: { id: "a" },
+        },
+      ],
+    };
+    const result = await pushSync("http://localhost:3001", "token-1", request);
+
+    expect(result).toEqual(response);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-1" },
+      body: JSON.stringify(request),
+    });
+  });
+
+  it("pullSync GETs with the since token and returns the parsed changes", async () => {
+    const response = { changes: [], nextSyncToken: "2026-11-15T00:00:00.000Z" };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await pullSync("http://localhost:3001", "token-1", "2026-11-14T00:00:00.000Z");
+
+    expect(result).toEqual(response);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:3001/sync?since=2026-11-14T00%3A00%3A00.000Z",
+      { headers: { Authorization: "Bearer token-1" } },
+    );
+  });
+
+  it("pullSync omits the query string when there is no token yet", async () => {
+    const response = { changes: [], nextSyncToken: "2026-11-15T00:00:00.000Z" };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await pullSync("http://localhost:3001", "token-1", null);
+
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/sync", {
+      headers: { Authorization: "Bearer token-1" },
+    });
+  });
+
+  it("throws ApiError when a sync request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 500 })),
+    );
+
+    await expect(pullSync("http://localhost:3001", "token-1", null)).rejects.toThrow(ApiError);
+  });
+});
+
+describe("isNetworkError", () => {
+  it("is true for a TypeError (what fetch rejects with when offline)", () => {
+    expect(isNetworkError(new TypeError("Failed to fetch"))).toBe(true);
+  });
+
+  it("is false for an ApiError (server responded, just not with 2xx)", () => {
+    expect(isNetworkError(new ApiError("get profile failed with status 401"))).toBe(false);
   });
 });

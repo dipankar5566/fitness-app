@@ -9,15 +9,23 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { ApiError, searchFoods, type FoodSearchResult } from "../lib/api";
+import { isNetworkError, searchFoods } from "../lib/api";
+import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
+import { listRecentFoods } from "../lib/food-cache-repo";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FoodSearch">;
 
+interface DisplayResult {
+  code: string;
+  name: string;
+  foodType: string;
+}
+
 export function FoodSearchScreen({ navigation, route }: Props) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<FoodSearchResult[]>([]);
+  const [results, setResults] = useState<DisplayResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -30,10 +38,18 @@ export function FoodSearchScreen({ navigation, route }: Props) {
     setError(null);
     try {
       const found = await searchFoods(API_URL, query.trim());
-      setResults(found);
+      setResults(found.map((item) => ({ code: item.code, name: item.name, foodType: item.food_type })));
       setHasSearched(true);
     } catch (err) {
-      setError(err instanceof ApiError ? "Search failed. Check your connection and try again." : "Something went wrong.");
+      if (isNetworkError(err)) {
+        const db = await getDatabase();
+        const recent = await listRecentFoods(db);
+        setResults(recent.map((item) => ({ code: item.code, name: item.name, foodType: item.foodType })));
+        setError(recent.length > 0 ? "Offline - showing recently logged foods." : "Offline, and no recent foods to show.");
+      } else {
+        setError("Search failed. Check your connection and try again.");
+      }
+      setHasSearched(true);
     } finally {
       setIsSearching(false);
     }
@@ -66,7 +82,7 @@ export function FoodSearchScreen({ navigation, route }: Props) {
             }
           >
             <Text style={styles.resultName}>{item.name}</Text>
-            <Text style={styles.resultType}>{item.food_type}</Text>
+            <Text style={styles.resultType}>{item.foodType}</Text>
           </Pressable>
         )}
         ListEmptyComponent={

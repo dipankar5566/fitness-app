@@ -5,9 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Button, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ChipSelect } from "../components/ChipSelect";
 import { trackEvent } from "../lib/analytics";
-import { ApiError, createFoodLog, getFoodDetail, type FoodDetail } from "../lib/api";
+import { getFoodDetail, type FoodDetail } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
+import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
+import { cacheFood, getCachedFood } from "../lib/food-cache-repo";
+import { insert } from "../lib/food-log-repo";
+import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LogFood">;
@@ -36,19 +40,30 @@ export function LogFoodScreen({ navigation, route }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const applyDefaultServing = (result: FoodDetail) => {
+    const defaultServing = result.servingMeasures.find((measure) => measure.isDefault) ?? result.servingMeasures[0];
+    if (defaultServing) {
+      setUnit(defaultServing.name);
+      setQuantity("1");
+    }
+  };
+
   useEffect(() => {
     void (async () => {
+      const db = await getDatabase();
       try {
         const result = await getFoodDetail(API_URL, foodCode);
         setDetail(result);
-        const defaultServing =
-          result.servingMeasures.find((measure) => measure.isDefault) ?? result.servingMeasures[0];
-        if (defaultServing) {
-          setUnit(defaultServing.name);
-          setQuantity("1");
-        }
+        applyDefaultServing(result);
+        await cacheFood(db, result);
       } catch {
-        setLoadFailed(true);
+        const cached = await getCachedFood(db, foodCode);
+        if (cached) {
+          setDetail(cached);
+          applyDefaultServing(cached);
+        } else {
+          setLoadFailed(true);
+        }
       }
     })();
   }, [foodCode]);
@@ -98,24 +113,29 @@ export function LogFoodScreen({ navigation, route }: Props) {
       if (!session) {
         throw new Error("No guest session");
       }
-      await createFoodLog(API_URL, session.accessToken, {
+      const db = await getDatabase();
+      const now = new Date().toISOString();
+      await insert(db, {
         id: Crypto.randomUUID(),
+        accountId: session.accountId,
         foodSource: "indb",
         foodRef: detail.code,
         quantity: parsedQuantity,
         unit,
         mealType,
-        loggedAt: new Date().toISOString(),
+        loggedAt: now,
         source: "manual",
         isEstimate: false,
+        isDeleted: false,
+        updatedAt: now,
+        macros: preview,
       });
       trackEvent("food_logged");
+      void syncNow(db, API_URL, session.accessToken);
       navigation.navigate("Home", { accountId });
-    } catch (err) {
+    } catch {
       trackEvent("food_log_failed");
-      setSubmitError(
-        err instanceof ApiError ? "Could not save. Try again." : "Something went wrong.",
-      );
+      setSubmitError("Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }

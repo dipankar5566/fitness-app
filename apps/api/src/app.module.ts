@@ -6,6 +6,7 @@ import { FoodLogModule } from "./food-log/food-log.module.js";
 import { FoodModule } from "./food/food.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { ProfileModule } from "./profile/profile.module.js";
+import { SyncModule } from "./sync/sync.module.js";
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ProfileModule } from "./profile/profile.module.js";
     FoodModule,
     ProfileModule,
     FoodLogModule,
+    SyncModule,
   ],
   controllers: [HealthController],
 })

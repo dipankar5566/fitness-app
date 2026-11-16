@@ -82,6 +82,15 @@ export const syncPushRequestSchema = z.object({
 });
 export type SyncPushRequest = z.infer<typeof syncPushRequestSchema>;
 
+export const syncRejectReasonSchema = z.enum(["not_owner", "stale", "invalid"]);
+export type SyncRejectReason = z.infer<typeof syncRejectReasonSchema>;
+
+export const syncPushResponseSchema = z.object({
+  applied: z.array(z.string()),
+  rejected: z.array(z.object({ id: z.string(), reason: syncRejectReasonSchema })),
+});
+export type SyncPushResponse = z.infer<typeof syncPushResponseSchema>;
+
 export const syncPullResponseSchema = z.object({
   changes: z.array(syncPushRowSchema),
   nextSyncToken: z.string(),

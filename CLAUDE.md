@@ -20,14 +20,26 @@ local Postgres `indb` database (not just unit tests):
   `search_foods()` doesn't return; `POST/GET/PATCH/DELETE /food-log` (`apps/api/src/food-log/`)
   covers manual meal logging with server-computed macros. `apps/mobile`'s `FoodSearchScreen` ->
   `LogFoodScreen` -> `HomeScreen` flow is wired end-to-end.
+- Offline-first logging + `/sync` v1: `apps/mobile/src/lib/db.ts` + `db-schema.ts` now open and
+  migrate a real local SQLite mirror (`food_log`, `food_cache`, `kv`); `food-log-repo.ts` is the
+  offline outbox (dirty flag, push-in-flight exception) that `LogFoodScreen`/`HomeScreen` read and
+  write instead of calling the API directly; `sync-engine.ts`'s `syncNow` pushes dirty rows then
+  pulls, triggered on app start, after every write, and on `AppState` foreground (`App.tsx`).
+  `POST`/`GET /sync` (`apps/api/src/sync/`) implement the push/pull protocol against `food_log`
+  only (workout/body-metric tables plug in the same way once their screens exist in M3) - **the
+  pull cursor is `server_updated_at`, a server-set column added by `0003_sync_cursor.sql`, not the
+  client-set `updated_at`** (which drives last-write-wins instead): a client can legitimately push
+  an old `updated_at` long after reconnecting, so the pull cursor has to be independent of it.
+  Verified end-to-end: idempotent-retry, stale-reject, not-owner-reject, delete, and incremental
+  pull via curl against the real `indb` database, plus unit tests in both `apps/api` and
+  `apps/mobile` (the mobile ones run real SQL against `node:sqlite`, not a mock, since expo-sqlite
+  can't load outside React Native - see `node-sqlite-test-db.ts`).
 
 **Still open in M2** (`docs/ROADMAP.md`): diet-type filtering - **blocked**, the `indb` schema
 (`db/migrations/0001_indb.sql`) carries no veg/non-veg/vegan metadata on `food`/`food_name`, so
 this needs a data-model addition (new column + backfill) before it's implementable, not just UI
 work; custom foods/recipes (`app.custom_food`/`app.custom_food_ingredient` tables already exist,
-unused); offline-first behavior - logging currently requires connectivity, `expo-sqlite` is still
-empty, and the `/sync` endpoint from `ARCHITECTURE.md` section 3 doesn't exist yet even though the
-Zod sync-envelope schemas in `packages/shared/schemas.ts` do.
+unused).
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`

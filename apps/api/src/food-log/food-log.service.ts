@@ -29,6 +29,8 @@ export interface FoodLogEntryWithMacros extends FoodLogRow {
   macros: MacroBreakdown | null;
 }
 
+export type { FoodLogRow };
+
 function resolveGrams(
   quantity: number,
   unit: string,
@@ -54,6 +56,25 @@ function computeMacros(grams: number | null, summary: FoodNutrientSummary): Macr
     fatG: scaleOrNull(summary.fatGPer100g),
     carbG: scaleOrNull(summary.carbGPer100g),
   };
+}
+
+/** Enriches raw food_log rows with real macros for indb-sourced rows (ARCHITECTURE.md §2). Pulled out
+ * of `listByDate` so the sync pull path (which also returns food_log rows) can reuse it. */
+export async function enrichWithMacros(
+  rows: FoodLogRow[],
+  food: FoodService,
+): Promise<FoodLogEntryWithMacros[]> {
+  const indbCodes = [...new Set(rows.filter((row) => row.food_source === "indb").map((row) => row.food_ref))];
+  const summaryByCode = await food.getNutrientSummaries(indbCodes);
+
+  return rows.map((row) => {
+    const summary = row.food_source === "indb" ? summaryByCode.get(row.food_ref) : undefined;
+    if (!summary) {
+      return { ...row, macros: null };
+    }
+    const grams = resolveGrams(Number(row.quantity), row.unit, summary.servingGramsByName);
+    return { ...row, macros: computeMacros(grams, summary) };
+  });
 }
 
 @Injectable()
@@ -96,24 +117,14 @@ export class FoodLogService {
       [accountId, start, end],
     );
 
-    const indbCodes = [...new Set(result.rows.filter((row) => row.food_source === "indb").map((row) => row.food_ref))];
-    const summaryByCode = await this.food.getNutrientSummaries(indbCodes);
-
-    return result.rows.map((row) => {
-      const summary = row.food_source === "indb" ? summaryByCode.get(row.food_ref) : undefined;
-      if (!summary) {
-        return { ...row, macros: null };
-      }
-      const grams = resolveGrams(Number(row.quantity), row.unit, summary.servingGramsByName);
-      return { ...row, macros: computeMacros(grams, summary) };
-    });
+    return enrichWithMacros(result.rows, this.food);
   }
 
   async update(accountId: string, id: string, patch: UpdateFoodLogRequest): Promise<FoodLogRow> {
     const existing = await this.findOwned(accountId, id);
     const result = await this.db.query<FoodLogRow>(
       `UPDATE app.food_log SET
-         quantity = $3, unit = $4, meal_type = $5, logged_at = $6, updated_at = now()
+         quantity = $3, unit = $4, meal_type = $5, logged_at = $6, updated_at = now(), server_updated_at = now()
        WHERE id = $1 AND account_id = $2
        RETURNING *`,
       [
@@ -131,7 +142,7 @@ export class FoodLogService {
   async softDelete(accountId: string, id: string): Promise<void> {
     await this.findOwned(accountId, id);
     await this.db.query(
-      "UPDATE app.food_log SET is_deleted = true, updated_at = now() WHERE id = $1 AND account_id = $2",
+      "UPDATE app.food_log SET is_deleted = true, updated_at = now(), server_updated_at = now() WHERE id = $1 AND account_id = $2",
       [id, accountId],
     );
   }

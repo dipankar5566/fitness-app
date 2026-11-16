@@ -1,8 +1,14 @@
 import {
   createFoodLogRequestSchema,
   onboardingRequestSchema,
+  syncPullResponseSchema,
+  syncPushRequestSchema,
+  syncPushResponseSchema,
   type CreateFoodLogRequest,
   type OnboardingRequest,
+  type SyncPullResponse,
+  type SyncPushRequest,
+  type SyncPushResponse,
 } from "@fitness-app/shared";
 import { z } from "zod";
 
@@ -14,6 +20,12 @@ const guestAuthResponseSchema = z.object({
 export type GuestAuthResponse = z.infer<typeof guestAuthResponseSchema>;
 
 export class ApiError extends Error {}
+
+/** A `fetch` rejection with no server response (offline, DNS failure, timeout) - as opposed to an
+ * `ApiError` (server responded, just not with 2xx) or a `ZodError` (server responded with a bad shape). */
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError;
+}
 
 /** Calls POST /auth/guest on the API (guest-first auth - CLAUDE.md "Architecture rules"). */
 export async function createGuestAccount(apiUrl: string): Promise<GuestAuthResponse> {
@@ -199,4 +211,35 @@ export async function deleteFoodLog(
   if (!response.ok) {
     throw new ApiError(`delete food log failed with status ${response.status}`);
   }
+}
+
+export async function pushSync(
+  apiUrl: string,
+  accessToken: string,
+  request: SyncPushRequest,
+): Promise<SyncPushResponse> {
+  const response = await fetch(`${apiUrl}/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(syncPushRequestSchema.parse(request)),
+  });
+  if (!response.ok) {
+    throw new ApiError(`sync push failed with status ${response.status}`);
+  }
+  return syncPushResponseSchema.parse(await response.json());
+}
+
+export async function pullSync(
+  apiUrl: string,
+  accessToken: string,
+  since: string | null,
+): Promise<SyncPullResponse> {
+  const query = since ? `?since=${encodeURIComponent(since)}` : "";
+  const response = await fetch(`${apiUrl}/sync${query}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new ApiError(`sync pull failed with status ${response.status}`);
+  }
+  return syncPullResponseSchema.parse(await response.json());
 }
