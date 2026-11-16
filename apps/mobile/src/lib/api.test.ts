@@ -9,6 +9,7 @@ import {
   isNetworkError,
   listFoodLog,
   listPrograms,
+  parseMealDraft,
   pullSync,
   pushSync,
   searchExercises,
@@ -262,6 +263,48 @@ describe("listPrograms", () => {
     );
 
     await expect(listPrograms("http://localhost:3001")).rejects.toThrow(ApiError);
+  });
+});
+
+describe("parseMealDraft", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("posts the text with auth and returns the parsed draft items", async () => {
+    const draft = [
+      {
+        rawName: "roti",
+        rawQuantity: 2,
+        rawUnit: "piece",
+        foodSource: "indb",
+        foodRef: "ASC096",
+        foodName: "Chapati/Roti",
+        quantity: 2,
+        unit: "piece",
+        isEstimate: false,
+      },
+    ];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(draft), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const found = await parseMealDraft("http://localhost:3001", "token-1", "2 roti");
+
+    expect(found).toEqual(draft);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/ai/meal/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-1" },
+      body: JSON.stringify({ text: "2 roti" }),
+    });
+  });
+
+  it("throws ApiError when the request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 500 })),
+    );
+
+    await expect(parseMealDraft("http://localhost:3001", "token-1", "2 roti")).rejects.toThrow(ApiError);
   });
 });
 

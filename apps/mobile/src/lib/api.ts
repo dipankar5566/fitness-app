@@ -284,6 +284,37 @@ export async function listPrograms(apiUrl: string): Promise<Program[]> {
   return z.array(programSchema).parse(await response.json());
 }
 
+const mealDraftItemSchema = z.object({
+  rawName: z.string(),
+  rawQuantity: z.number(),
+  rawUnit: z.string(),
+  foodSource: z.literal("indb").nullable(),
+  foodRef: z.string().nullable(),
+  foodName: z.string().nullable(),
+  quantity: z.number(),
+  unit: z.string(),
+  isEstimate: z.boolean(),
+});
+export type MealDraftItem = z.infer<typeof mealDraftItemSchema>;
+
+/** AI meal-text parse -> search-then-match draft (ARCHITECTURE.md §5). Never writes to food_log
+ * itself - the screen shows this for editing, then logs each resolved item via createFoodLog. */
+export async function parseMealDraft(
+  apiUrl: string,
+  accessToken: string,
+  text: string,
+): Promise<MealDraftItem[]> {
+  const response = await fetch(`${apiUrl}/ai/meal/parse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ text }),
+  });
+  if (!response.ok) {
+    throw new ApiError(`meal parse failed with status ${response.status}`);
+  }
+  return z.array(mealDraftItemSchema).parse(await response.json());
+}
+
 export async function pushSync(
   apiUrl: string,
   accessToken: string,

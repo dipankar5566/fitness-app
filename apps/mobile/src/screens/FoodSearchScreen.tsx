@@ -118,17 +118,24 @@ export function FoodSearchScreen({ navigation, route }: Props) {
         renderItem={({ item }) => (
           <Pressable
             style={styles.resultRow}
-            onPress={() =>
-              route.params.mode === "pickIngredient"
-                ? navigation.navigate("IngredientQuantity", {
-                    accountId: route.params.accountId,
-                    foodCode: item.code,
-                  })
-                : navigation.navigate("LogFood", {
-                    accountId: route.params.accountId,
-                    foodCode: item.code,
-                  })
-            }
+            onPress={() => {
+              if (route.params.mode === "pickIngredient") {
+                navigation.navigate("IngredientQuantity", {
+                  accountId: route.params.accountId,
+                  foodCode: item.code,
+                });
+              } else if (route.params.mode === "pickMealItem") {
+                navigation.navigate("LogMealFromText", {
+                  accountId: route.params.accountId,
+                  pickedMealItemFood: { index: route.params.mealItemIndex!, code: item.code, name: item.name },
+                });
+              } else {
+                navigation.navigate("LogFood", {
+                  accountId: route.params.accountId,
+                  foodCode: item.code,
+                });
+              }
+            }}
           >
             <View>
               <Text style={styles.resultName}>{item.name}</Text>

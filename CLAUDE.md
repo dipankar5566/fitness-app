@@ -174,9 +174,25 @@ endpoint. Verified with real OpenAI calls (not mocked): "2 roti aur dal" → `ro
 `dal x1 bowl`; "3 idlis with sambar and a cup of filter coffee" and "paneer bhurji and chapati"
 (implicit quantity) both parsed correctly; missing auth → 401; empty text → 400.
 
-Still to do for M4: resolve parsed items against `indb`/`packaged_food`/`custom_food` into a
-confirmable draft → log (the real "text-based meal parse" roadmap item - this turn only built
-raw extraction), photo-based meal parse, barcode scan → Open Food Facts → `packaged_food`, and
+Second roadmap item done: text-based meal parse → draft → confirm → log (Hinglish tested).
+`apps/api/src/ai/ai-meal-draft.service.ts`'s `resolveDraft` calls `AiService.parseMealText` then
+`FoodService.search` (existing fuzzy `search_foods()`) for each raw item, top-1 match. Per
+ARCHITECTURE.md §5's own wording ("resolved to a food_id... **or** explicitly flagged
+`is_estimate`"), a match is never flagged `is_estimate` - only an unresolved item is (`foodSource`/
+`foodRef` null). `POST /ai/meal/parse` returns this draft; nothing is written to `food_log` from
+here - `apps/mobile`'s new `LogMealFromTextScreen` shows it for editing (per-item quantity/unit via
+the same `servingMeasures`/live-preview logic `LogFoodScreen` already has, fetched via the
+existing `getFoodDetail`) and logs each resolved item through the existing local food-log outbox
+with `source: "ai_text"` - no new log-writing code, reusing `food-log-repo.ts`'s `insert` +
+`syncNow` exactly as manual logging does. A real smoke test surfaced a genuinely wrong match
+("filter coffee" → "Coffee drops" from `search_foods()`'s fuzzy ranking) - that's why "Find a
+different match" exists: a new `pickMealItem` mode on `FoodSearchScreen` (alongside the existing
+`pickIngredient`) hands the replacement back to `LogMealFromTextScreen` via route params, the same
+cross-screen pattern `CreateCustomFoodScreen` already uses. Verified against real OpenAI + the
+real `indb` database: parse → fetch matched food detail → `POST /food-log` with
+`source: "ai_text"`, psql-confirmed row, plus unit tests in `apps/api` and `apps/mobile`.
+
+Still to do for M4: photo-based meal parse, barcode scan → Open Food Facts → `packaged_food`, and
 the AI usage ledger + daily quota (`app.ai_usage` - schema already exists from M1).
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's

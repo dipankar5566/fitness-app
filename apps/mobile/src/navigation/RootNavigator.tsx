@@ -9,6 +9,7 @@ import { GuestLoadingScreen } from "../screens/GuestLoadingScreen";
 import { HomeScreen } from "../screens/HomeScreen";
 import { IngredientQuantityScreen } from "../screens/IngredientQuantityScreen";
 import { LogFoodScreen } from "../screens/LogFoodScreen";
+import { LogMealFromTextScreen } from "../screens/LogMealFromTextScreen";
 import { MyFoodsScreen } from "../screens/MyFoodsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { ProgramsScreen } from "../screens/ProgramsScreen";
@@ -24,7 +25,7 @@ export type RootStackParamList = {
   GuestLoading: undefined;
   Onboarding: { accountId: string };
   Home: { accountId: string };
-  FoodSearch: { accountId: string; mode?: "pickIngredient" };
+  FoodSearch: { accountId: string; mode?: "pickIngredient" | "pickMealItem"; mealItemIndex?: number };
   LogFood: { accountId: string; foodCode: string };
   MyFoods: { accountId: string };
   CreateCustomFood: { accountId: string; pickedIngredient?: PickedIngredient };
@@ -33,6 +34,10 @@ export type RootStackParamList = {
   ExerciseDetail: { exercise: Exercise };
   WorkoutSession: { accountId: string; pickedExercise?: Exercise };
   Programs: { accountId: string };
+  LogMealFromText: {
+    accountId: string;
+    pickedMealItemFood?: { index: number; code: string; name: string };
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -85,6 +90,11 @@ export function RootNavigator() {
           options={{ title: "Workout" }}
         />
         <Stack.Screen name="Programs" component={ProgramsScreen} options={{ title: "Programs" }} />
+        <Stack.Screen
+          name="LogMealFromText"
+          component={LogMealFromTextScreen}
+          options={{ title: "Log a meal" }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
