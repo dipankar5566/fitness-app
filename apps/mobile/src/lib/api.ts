@@ -315,6 +315,30 @@ export async function parseMealDraft(
   return z.array(mealDraftItemSchema).parse(await response.json());
 }
 
+/** Same draft shape as parseMealDraft, from a single meal photo (PRD section 5.5). React
+ * Native's standard multipart-upload idiom: a {uri, name, type} object appended to FormData,
+ * matching what expo-image-picker's ImagePickerAsset gives the caller - no Content-Type header
+ * here, fetch sets the multipart boundary itself from the FormData body. */
+export async function parseMealPhoto(
+  apiUrl: string,
+  accessToken: string,
+  photo: { uri: string; name: string; type: string },
+): Promise<MealDraftItem[]> {
+  const formData = new FormData();
+  // React Native's FormData.append accepts this file-object shape; the DOM FormData type doesn't
+  // model it, hence the cast - this is the standard RN idiom, not a workaround for a bug.
+  formData.append("photo", photo as unknown as Blob);
+  const response = await fetch(`${apiUrl}/ai/meal/parse-photo`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new ApiError(`meal photo parse failed with status ${response.status}`);
+  }
+  return z.array(mealDraftItemSchema).parse(await response.json());
+}
+
 export async function pushSync(
   apiUrl: string,
   accessToken: string,

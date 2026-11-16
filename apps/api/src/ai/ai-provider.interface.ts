@@ -3,11 +3,11 @@
  * (OpenAI chosen, decided per PRD §9's "AI provider(s) & model per task" open question); no
  * feature calls an AI SDK directly (CLAUDE.md "Architecture rules").
  *
- * Deliberately only has parseMealText for now - ARCHITECTURE.md's full sketch also has
- * parseMealImage/chat/generatePlan, but those belong to later M4/M5 roadmap items (photo-based
- * meal parse, AI coach, AI-generated plans) that don't exist yet. Adding stub methods ahead of
- * the features that need them would be exactly the kind of half-finished implementation
- * CLAUDE.md asks not to write - extend this interface when each of those is actually built.
+ * Deliberately has only parseMealText/parseMealImage so far - ARCHITECTURE.md's full sketch also
+ * has chat/generatePlan, but those belong to M5 roadmap items (AI coach, AI-generated plans) that
+ * don't exist yet. Adding stub methods ahead of the features that need them would be exactly the
+ * kind of half-finished implementation CLAUDE.md asks not to write - extend this interface when
+ * each of those is actually built.
  */
 
 export interface RawMealItem {
@@ -27,4 +27,9 @@ export interface AiProvider {
   /** Extracts raw food mentions + quantities from a free-text meal description. No DB knowledge,
    * no food_id resolution - just what the text says. */
   parseMealText(text: string): Promise<RawMealItem[]>;
+
+  /** Same extraction, from a single meal photo instead of text. Quantities are a visual portion
+   * estimate, not a number the user stated - the caller (AiMealDraftService) always flags these
+   * items is_estimate for that reason, regardless of whether the food itself matched. */
+  parseMealImage(image: Buffer, mimeType: string): Promise<RawMealItem[]>;
 }

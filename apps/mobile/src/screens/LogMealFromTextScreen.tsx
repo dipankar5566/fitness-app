@@ -1,11 +1,19 @@
-import type { MealType } from "@fitness-app/shared";
+import type { LogSource, MealType } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
+import * as ImagePicker from "expo-image-picker";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Button, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ChipSelect } from "../components/ChipSelect";
 import { trackEvent } from "../lib/analytics";
-import { getFoodDetail, isNetworkError, parseMealDraft, type FoodDetail, type MealDraftItem } from "../lib/api";
+import {
+  getFoodDetail,
+  isNetworkError,
+  parseMealDraft,
+  parseMealPhoto,
+  type FoodDetail,
+  type MealDraftItem,
+} from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
@@ -70,19 +78,23 @@ function normalizeUnit(item: MealDraftItem, detail: FoodDetail | undefined): Mea
 }
 
 /**
- * Text-based AI meal logging (ARCHITECTURE.md §5, PRD §5.5): free text -> draft (via POST
- * /ai/meal/parse, search-then-match against indb) -> editable per-item quantity/unit/match ->
- * confirm logs each resolved item through the existing local food-log outbox (source: "ai_text"),
- * same offline-first path LogFoodScreen already uses for manual entries. A real smoke test turned
- * up a wrong match ("filter coffee" -> "Coffee drops") - that's exactly why "Find a different
- * match" exists: hands off to FoodSearchScreen's new "pickMealItem" mode, which returns the
- * replacement here via route params.
+ * AI meal logging, from text or a photo (ARCHITECTURE.md §5, PRD §5.5) - one shared confirm
+ * screen for both, since everything past "get a draft" is identical: free text (POST
+ * /ai/meal/parse) or a single photo (POST /ai/meal/parse-photo, captured/picked via
+ * expo-image-picker), either way search-then-matched against indb -> editable per-item
+ * quantity/unit/match -> confirm logs each resolved item through the existing local food-log
+ * outbox (source: "ai_text" or "ai_photo", tracked in `logSource`), same offline-first path
+ * LogFoodScreen already uses for manual entries. A real smoke test turned up a wrong text match
+ * ("filter coffee" -> "Coffee drops") - that's exactly why "Find a different match" exists: hands
+ * off to FoodSearchScreen's new "pickMealItem" mode, which returns the replacement here via route
+ * params.
  */
 export function LogMealFromTextScreen({ navigation, route }: Props) {
   const { accountId } = route.params;
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<MealDraftItem[]>([]);
   const [detailByFoodRef, setDetailByFoodRef] = useState<Record<string, FoodDetail>>({});
+  const [logSource, setLogSource] = useState<LogSource>("ai_text");
   const [mealType, setMealType] = useState<MealType>(defaultMealType());
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -114,6 +126,22 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
     })();
   }, [route.params.pickedMealItemFood, navigation]);
 
+  /** Shared by the text and photo paths: fetch each matched item's FoodDetail (for serving
+   * measures/macro preview, the same data LogFoodScreen already uses) and normalize units before
+   * showing the draft. */
+  const applyParsedItems = async (items: MealDraftItem[]) => {
+    const refs = [...new Set(items.filter((item) => item.foodRef).map((item) => item.foodRef!))];
+    const details = await Promise.all(refs.map((ref) => getFoodDetail(API_URL, ref).catch(() => null)));
+    const detailMap: Record<string, FoodDetail> = {};
+    refs.forEach((ref, index) => {
+      const detail = details[index];
+      if (detail) detailMap[ref] = detail;
+    });
+
+    setDetailByFoodRef(detailMap);
+    setDraft(items.map((item) => (item.foodRef ? normalizeUnit(item, detailMap[item.foodRef]) : item)));
+  };
+
   const handleParse = async () => {
     if (!text.trim()) return;
     setIsParsing(true);
@@ -123,17 +151,8 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
       const session = await loadGuestSession();
       if (!session) throw new Error("No guest session");
       const items = await parseMealDraft(API_URL, session.accessToken, text.trim());
-
-      const refs = [...new Set(items.filter((item) => item.foodRef).map((item) => item.foodRef!))];
-      const details = await Promise.all(refs.map((ref) => getFoodDetail(API_URL, ref).catch(() => null)));
-      const detailMap: Record<string, FoodDetail> = {};
-      refs.forEach((ref, index) => {
-        const detail = details[index];
-        if (detail) detailMap[ref] = detail;
-      });
-
-      setDetailByFoodRef(detailMap);
-      setDraft(items.map((item) => (item.foodRef ? normalizeUnit(item, detailMap[item.foodRef]) : item)));
+      setLogSource("ai_text");
+      await applyParsedItems(items);
     } catch (err) {
       setParseError(
         isNetworkError(err) ? "Offline - try again when connected." : "Couldn't parse that. Try rephrasing.",
@@ -141,6 +160,59 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
     } finally {
       setIsParsing(false);
     }
+  };
+
+  const handlePhoto = async (launch: () => Promise<ImagePicker.ImagePickerResult>, permissionError: string) => {
+    setIsParsing(true);
+    setParseError(null);
+    setConfirmError(null);
+    try {
+      const result = await launch();
+      if (result.canceled || !result.assets[0]) {
+        setIsParsing(false);
+        return;
+      }
+      const asset = result.assets[0];
+      const session = await loadGuestSession();
+      if (!session) throw new Error("No guest session");
+      const items = await parseMealPhoto(API_URL, session.accessToken, {
+        uri: asset.uri,
+        name: asset.fileName ?? "meal.jpg",
+        type: asset.mimeType ?? "image/jpeg",
+      });
+      setLogSource("ai_photo");
+      await applyParsedItems(items);
+    } catch (err) {
+      setParseError(
+        isNetworkError(err) ? "Offline - try again when connected." : permissionError,
+      );
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      setParseError("Camera permission is required to take a meal photo.");
+      return;
+    }
+    await handlePhoto(
+      () => ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.7 }),
+      "Couldn't read that photo. Try again.",
+    );
+  };
+
+  const handlePickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setParseError("Photo library permission is required to choose a meal photo.");
+      return;
+    }
+    await handlePhoto(
+      () => ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 }),
+      "Couldn't read that photo. Try again.",
+    );
   };
 
   const updateItem = (index: number, patch: Partial<Pick<MealDraftItem, "quantity" | "unit">>) => {
@@ -175,7 +247,7 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
           unit: item.unit,
           mealType,
           loggedAt: now,
-          source: "ai_text",
+          source: logSource,
           isEstimate: item.isEstimate,
           isDeleted: false,
           updatedAt: now,
@@ -216,6 +288,16 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
               onPress={() => void handleParse()}
               disabled={isParsing || !text.trim()}
             />
+          </View>
+
+          <Text style={styles.orLabel}>or</Text>
+          <View style={styles.photoButtons}>
+            <View style={styles.photoButton}>
+              <Button title="Take a photo" onPress={() => void handleTakePhoto()} disabled={isParsing} />
+            </View>
+            <View style={styles.photoButton}>
+              <Button title="Choose from gallery" onPress={() => void handlePickPhoto()} disabled={isParsing} />
+            </View>
           </View>
 
           {draft.length > 0 ? (
@@ -302,6 +384,9 @@ const styles = StyleSheet.create({
   label: { fontWeight: "600", marginBottom: 6 },
   textArea: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, minHeight: 60 },
   button: { marginTop: 12 },
+  orLabel: { textAlign: "center", color: "#888", marginTop: 12 },
+  photoButtons: { flexDirection: "row", gap: 8, marginTop: 8 },
+  photoButton: { flex: 1 },
   error: { color: "#c00", marginTop: 8, textAlign: "center" },
   card: { marginTop: 16, padding: 12, borderWidth: 1, borderColor: "#eee", borderRadius: 8 },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

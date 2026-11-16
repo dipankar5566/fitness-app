@@ -10,6 +10,7 @@ import {
   listFoodLog,
   listPrograms,
   parseMealDraft,
+  parseMealPhoto,
   pullSync,
   pushSync,
   searchExercises,
@@ -305,6 +306,55 @@ describe("parseMealDraft", () => {
     );
 
     await expect(parseMealDraft("http://localhost:3001", "token-1", "2 roti")).rejects.toThrow(ApiError);
+  });
+});
+
+describe("parseMealPhoto", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("posts the photo as multipart form data with auth and returns the parsed draft", async () => {
+    const draft = [
+      {
+        rawName: "paratha",
+        rawQuantity: 2,
+        rawUnit: "piece",
+        foodSource: "indb",
+        foodRef: "ASC103",
+        foodName: "Pea parantha/paratha",
+        quantity: 2,
+        unit: "piece",
+        isEstimate: true,
+      },
+    ];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(draft), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const found = await parseMealPhoto("http://localhost:3001", "token-1", {
+      uri: "file:///meal.jpg",
+      name: "meal.jpg",
+      type: "image/jpeg",
+    });
+
+    expect(found).toEqual(draft);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = (fetchMock as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:3001/ai/meal/parse-photo");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({ Authorization: "Bearer token-1" });
+    expect(init.body).toBeInstanceOf(FormData);
+  });
+
+  it("throws ApiError when the request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 500 })),
+    );
+
+    await expect(
+      parseMealPhoto("http://localhost:3001", "token-1", { uri: "file:///x.jpg", name: "x.jpg", type: "image/jpeg" }),
+    ).rejects.toThrow(ApiError);
   });
 });
 

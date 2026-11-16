@@ -5,12 +5,12 @@ import { AiMealDraftService } from "./ai-meal-draft.service.js";
 import { AiService } from "./ai.service.js";
 
 describe("AiMealDraftService", () => {
-  let ai: { parseMealText: ReturnType<typeof vi.fn> };
+  let ai: { parseMealText: ReturnType<typeof vi.fn>; parseMealImage: ReturnType<typeof vi.fn> };
   let food: { search: ReturnType<typeof vi.fn> };
   let service: AiMealDraftService;
 
   beforeEach(async () => {
-    ai = { parseMealText: vi.fn() };
+    ai = { parseMealText: vi.fn(), parseMealImage: vi.fn() };
     food = { search: vi.fn() };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -81,5 +81,40 @@ describe("AiMealDraftService", () => {
     expect(result).toHaveLength(2);
     expect(result[0].foodRef).toBe("L002");
     expect(result[1].foodRef).toBeNull();
+  });
+
+  it("resolveDraftFromImage forces is_estimate even when the food matched", async () => {
+    const image = Buffer.from("fake-image-bytes");
+    ai.parseMealImage.mockResolvedValue([{ name: "rice", quantity: 1, unit: "bowl" }]);
+    food.search.mockResolvedValue([
+      { food_id: 2, code: "L010", name: "Rice", food_type: "ingredient", score: 0.95, dietClass: "vegan" },
+    ]);
+
+    const result = await service.resolveDraftFromImage(image, "image/jpeg");
+
+    expect(ai.parseMealImage).toHaveBeenCalledWith(image, "image/jpeg");
+    expect(result).toEqual([
+      {
+        rawName: "rice",
+        rawQuantity: 1,
+        rawUnit: "bowl",
+        foodSource: "indb",
+        foodRef: "L010",
+        foodName: "Rice",
+        quantity: 1,
+        unit: "bowl",
+        isEstimate: true,
+      },
+    ]);
+  });
+
+  it("resolveDraftFromImage still has no food_id for an unmatched item", async () => {
+    ai.parseMealImage.mockResolvedValue([{ name: "mystery-dish", quantity: 1, unit: "plate" }]);
+    food.search.mockResolvedValue([]);
+
+    const result = await service.resolveDraftFromImage(Buffer.from("x"), "image/png");
+
+    expect(result[0].foodRef).toBeNull();
+    expect(result[0].isEstimate).toBe(true);
   });
 });

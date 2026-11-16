@@ -192,8 +192,28 @@ cross-screen pattern `CreateCustomFoodScreen` already uses. Verified against rea
 real `indb` database: parse → fetch matched food detail → `POST /food-log` with
 `source: "ai_text"`, psql-confirmed row, plus unit tests in `apps/api` and `apps/mobile`.
 
-Still to do for M4: photo-based meal parse, barcode scan → Open Food Facts → `packaged_food`, and
-the AI usage ledger + daily quota (`app.ai_usage` - schema already exists from M1).
+Third roadmap item done: photo-based meal parse (single photo, confirm screen). `AiProvider`
+gained `parseMealImage` (ARCHITECTURE.md §5's full sketch now one method closer to real);
+`OpenAiProvider` sends the image as a base64 data URI in a vision-capable chat completion, same
+`gpt-4o-mini` + Zod structured output as text parsing. `AiMealDraftService`'s per-item
+search-then-match loop is now shared (`resolveItems`) between `resolveDraft` (text) and the new
+`resolveDraftFromImage` - the only difference is `resolveDraftFromImage` **always** flags
+`is_estimate`, even for a matched item: a photo gives a visual portion guess, never a number the
+user actually stated, so the quantity itself is always approximate regardless of whether the food
+matched (text parsing's match-based rule is unchanged). `POST /ai/meal/parse-photo` takes a
+multipart upload (`@nestjs/platform-express`'s `FileInterceptor`, explicit `multer.memoryStorage()`
+so `file.buffer` is actually populated - the default is disk storage) capped at 8MB.
+`apps/mobile`'s `LogMealFromTextScreen` (renamed in spirit, not in route, to cover both input
+modes - see its docstring) gained "Take a photo"/"Choose from gallery" buttons via
+`expo-image-picker`, sharing every bit of the existing draft-editing/confirm UI and logic with the
+text path; a `logSource` state tracks which path populated the draft so confirm logs
+`source: "ai_text"` or `"ai_photo"` correctly. Verified against real OpenAI + the real `indb`
+database: a real Wikimedia Commons meal photo (dal-roti) correctly parsed to a matched item
+(`isEstimate: true` as expected), plus missing-auth/missing-file/non-image-file error paths, plus
+unit tests in `apps/api` and `apps/mobile`.
+
+Still to do for M4: barcode scan → Open Food Facts → `packaged_food`, and the AI usage ledger +
+daily quota (`app.ai_usage` - schema already exists from M1).
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`

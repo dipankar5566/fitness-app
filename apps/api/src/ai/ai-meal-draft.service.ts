@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { FoodService } from "../food/food.service.js";
+import type { RawMealItem } from "./ai-provider.interface.js";
 import { AiService } from "./ai.service.js";
 
 export interface MealDraftItem {
@@ -36,7 +37,20 @@ export class AiMealDraftService {
    */
   async resolveDraft(text: string): Promise<MealDraftItem[]> {
     const rawItems = await this.ai.parseMealText(text);
+    return this.resolveItems(rawItems, false);
+  }
 
+  /**
+   * Same search-then-match resolution as resolveDraft, but every item is forced is_estimate -
+   * a photo gives a visual portion estimate, never a number the user actually stated, so the
+   * quantity itself is always approximate here regardless of whether the food matched.
+   */
+  async resolveDraftFromImage(image: Buffer, mimeType: string): Promise<MealDraftItem[]> {
+    const rawItems = await this.ai.parseMealImage(image, mimeType);
+    return this.resolveItems(rawItems, true);
+  }
+
+  private async resolveItems(rawItems: RawMealItem[], forceEstimate: boolean): Promise<MealDraftItem[]> {
     return Promise.all(
       rawItems.map(async (raw) => {
         const [bestMatch] = await this.food.search(raw.name, 1);
@@ -62,7 +76,7 @@ export class AiMealDraftService {
           foodName: bestMatch.name,
           quantity: raw.quantity,
           unit: raw.unit,
-          isEstimate: false,
+          isEstimate: forceEstimate,
         };
       }),
     );

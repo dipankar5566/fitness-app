@@ -13,4 +13,8 @@ export class AiService {
   async parseMealText(text: string): Promise<RawMealItem[]> {
     return this.provider.parseMealText(text);
   }
+
+  async parseMealImage(image: Buffer, mimeType: string): Promise<RawMealItem[]> {
+    return this.provider.parseMealImage(image, mimeType);
+  }
 }

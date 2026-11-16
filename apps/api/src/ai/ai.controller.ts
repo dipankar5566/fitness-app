@@ -1,9 +1,21 @@
-import { BadRequestException, Body, Controller, Post, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { aiParseMealTextRequestSchema } from "@fitness-app/shared";
+import { memoryStorage } from "multer";
 import { ZodError } from "zod";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
 import { AiMealDraftService } from "./ai-meal-draft.service.js";
 import { AiService } from "./ai.service.js";
+
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024; // one meal photo; generous enough for a phone camera shot
 
 @Controller("ai")
 @UseGuards(JwtAuthGuard)
@@ -49,5 +61,22 @@ export class AiController {
       }
       throw error;
     }
+  }
+
+  /**
+   * Same draft shape as parseMealDraft, but search-then-matched from a single meal photo instead
+   * of text (PRD section 5.5, "photo-based meal parse"). Every returned item is is_estimate - see
+   * AiMealDraftService.resolveDraftFromImage's docstring for why that's forced regardless of match.
+   */
+  @Post("meal/parse-photo")
+  @UseInterceptors(FileInterceptor("photo", { storage: memoryStorage(), limits: { fileSize: MAX_PHOTO_BYTES } }))
+  async parseMealPhoto(@UploadedFile() file?: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException("Missing 'photo' file");
+    }
+    if (!file.mimetype.startsWith("image/")) {
+      throw new BadRequestException("File must be an image");
+    }
+    return this.mealDraft.resolveDraftFromImage(file.buffer, file.mimetype);
   }
 }
