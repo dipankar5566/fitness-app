@@ -114,10 +114,10 @@ D1 ≥ 50 %, D7 ≥ 30 %, D30 ≥ 15 % · median days logged/week ≥ 4 · AI-lo
 workouts logged/active user/week ≥ 2 · AI cost per MAU ≤ ₹15 (target, to be validated) · crash-free ≥ 99.5 %.
 
 ## 9. Open questions (with decide-by)
-| Question | Decide by |
-|---|---|
-| AI provider(s) & model per task | end of week 6 (before M4) |
-| Hosting & India data residency | end of week 10 (before beta) |
-| Revenue model | after beta data (~week 16) |
+| Question | Decide by | Decision |
+|---|---|---|
+| AI provider(s) & model per task | end of week 6 (before M4) | **OpenAI** - `gpt-4o-mini` for meal-text/photo parsing (cheap, per-call), `gpt-4o` reserved for the M5 coach. See ARCHITECTURE.md §5. |
+| Hosting & India data residency | end of week 10 (before beta) | — |
+| Revenue model | after beta data (~week 16) | — |
 | App name & brand | before Play closed testing (week 11) |
 | Under-18 support | post-beta |

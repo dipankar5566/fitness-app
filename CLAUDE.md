@@ -157,6 +157,28 @@ database: curl `GET /program` (4 programs, correct nested days/exercises), a ful
 `workout_session` with a real `program_day_id` through `/sync` (FK holds), psql spot-check, plus
 unit tests in `apps/api`, `apps/mobile`, and `packages/shared`.
 
+**M4 (AI meal logging + barcode) is in progress.** First roadmap item done: AI gateway interface +
+chosen provider wired. AI provider decided: **OpenAI** (PRD §9's tracked open question, now
+closed) - `gpt-4o-mini` for parsing, `gpt-4o` reserved for the M5 coach. `apps/api/src/ai/`:
+`AiProvider` (`ai-provider.interface.ts`) deliberately has only `parseMealText` for now -
+ARCHITECTURE.md §5's full interface sketch (`parseMealImage`/`chat`/`generatePlan`) is the
+eventual shape across M4/M5, not something to stub ahead of the features that need it.
+`OpenAiProvider` calls `chat.completions.parse` with a Zod response format
+(`openai/helpers/zod`'s `zodResponseFormat`) so the model's output is validated structured JSON,
+not freeform text to parse by hand. Like `DatabaseService`, `OpenAiProvider` itself has no
+dedicated unit test (it's a thin wrapper around a real paid external API) - `AiService`'s test
+mocks the `AI_PROVIDER` DI token the same way other services mock `DatabaseService`.
+`POST /ai/meal/parse-text` is auth-gated (`JwtAuthGuard`) even though nothing is account-scoped
+yet, unlike `/food/search`/`/exercise` - every call costs real money, so it can't be an open
+endpoint. Verified with real OpenAI calls (not mocked): "2 roti aur dal" → `roti x2 piece`,
+`dal x1 bowl`; "3 idlis with sambar and a cup of filter coffee" and "paneer bhurji and chapati"
+(implicit quantity) both parsed correctly; missing auth → 401; empty text → 400.
+
+Still to do for M4: resolve parsed items against `indb`/`packaged_food`/`custom_food` into a
+confirmable draft → log (the real "text-based meal parse" roadmap item - this turn only built
+raw extraction), photo-based meal parse, barcode scan → Open Food Facts → `packaged_food`, and
+the AI usage ledger + daily quota (`app.ai_usage` - schema already exists from M1).
+
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
 now uses `unplugin-swc` with `decoratorMetadata: true` instead. Verified with `AuthService`'s test
@@ -188,7 +210,8 @@ apps/
                        Features so far: health, auth (guest JWT), food (search + detail),
                        food-log (manual meal log CRUD), profile (onboarding + targets), sync
                        (push/pull), exercise (library + muscle/equipment filters), program
-                       (built-in program library, nested days/exercises).
+                       (built-in program library, nested days/exercises), ai (OpenAI-backed
+                       meal-text parsing via a provider-agnostic gateway interface).
   mobile/              Expo app (TypeScript, SDK 58), React Navigation stack. src/screens/,
                        src/lib/ (api.ts client, analytics.ts, auth-storage.ts, env.ts, db.ts),
                        src/components/ (ChipSelect, a generic enum picker reused across screens).

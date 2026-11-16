@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { AiModule } from "./ai/ai.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { ExerciseModule } from "./exercise/exercise.module.js";
@@ -14,6 +15,7 @@ import { SyncModule } from "./sync/sync.module.js";
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
+    AiModule,
     AuthModule,
     ExerciseModule,
     FoodModule,

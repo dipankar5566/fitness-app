@@ -89,7 +89,11 @@ interface AiProvider {
   generatePlan(kind: 'workout'|'meal', input: PlanInput): Promise<Plan>
 }
 ```
-- One interface, swappable implementation (Anthropic/OpenAI/Gemini/local) — **provider decided by week 6**.
+- One interface, swappable implementation (Anthropic/OpenAI/Gemini/local) — **decided: OpenAI**
+  (`gpt-4o-mini` for parsing, `gpt-4o` reserved for the coach; PRD §9). The interface above is the
+  full eventual shape; the real `AiProvider` (`apps/api/src/ai/ai-provider.interface.ts`) only has
+  `parseMealText` so far - `parseMealImage`/`chat`/`generatePlan` get added as those M4/M5 roadmap
+  items are actually built, not stubbed ahead of time.
 - `ParsedMeal` items are always resolved to a `food_id` in our DB (search-then-match, not free text) or
   explicitly flagged `is_estimate`; the gateway never writes to `food_log` directly — it returns a draft the
   app shows for confirmation (mirrors the "confirm before save" pattern from the teardown's Snap review step).

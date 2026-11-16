@@ -192,3 +192,12 @@ export const onboardingRequestSchema = z.object({
   goalMode: goalModeSchema,
 });
 export type OnboardingRequest = z.infer<typeof onboardingRequestSchema>;
+
+// AI meal-text parsing — PRD §5.5/ARCHITECTURE.md §5 (AI gateway). The gateway only extracts raw
+// food mentions + quantities from text (English/Hinglish) - it never resolves them to our own
+// food_id itself, so the response is a draft the app shows for confirmation before any food_log
+// write (ARCHITECTURE.md §5: "the gateway never writes to food_log directly").
+export const aiParseMealTextRequestSchema = z.object({
+  text: z.string().min(1),
+});
+export type AiParseMealTextRequest = z.infer<typeof aiParseMealTextRequestSchema>;
