@@ -1,3 +1,4 @@
+import { detectNewPrs, summarizeExercisePrs, type ExercisePrSummary, type NewPrFlags } from "@fitness-app/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
@@ -13,6 +14,7 @@ import {
   getActiveSession,
   insertSession,
   insertSet,
+  listSetsForExercise,
   listSetsForSession,
   type LocalWorkoutSession,
   type LocalWorkoutSet,
@@ -20,6 +22,15 @@ import {
 import type { RootStackParamList } from "../navigation/RootNavigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "WorkoutSession">;
+
+function describeNewPr(flags: NewPrFlags): string {
+  const kinds = [
+    flags.isWeightPr && "heaviest weight",
+    flags.isRepPr && "most reps at this weight",
+    flags.isOneRmPr && "best estimated 1RM",
+  ].filter((k): k is string => Boolean(k));
+  return `New PR - ${kinds.join(", ")}`;
+}
 
 /**
  * Start/resume today's session, add sets (picking an exercise hands off to ExerciseLibraryScreen
@@ -34,6 +45,8 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
   const [session, setSession] = useState<LocalWorkoutSession | null>(null);
   const [sets, setSets] = useState<LocalWorkoutSet[]>([]);
   const [pendingExercise, setPendingExercise] = useState<{ id: string; name: string } | null>(null);
+  const [priorPrSummary, setPriorPrSummary] = useState<ExercisePrSummary | null>(null);
+  const [newPrFlags, setNewPrFlags] = useState<NewPrFlags | null>(null);
   const [reps, setReps] = useState("");
   const [weightKg, setWeightKg] = useState("");
   const [rpe, setRpe] = useState("");
@@ -57,9 +70,17 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
     const picked = route.params.pickedExercise;
     if (picked) {
       setPendingExercise({ id: picked.id, name: picked.name });
+      setNewPrFlags(null);
       navigation.setParams({ pickedExercise: undefined });
+      // Fetched fresh on every pick (even re-picking the same exercise later in this session) so
+      // it reflects a set just logged moments ago - a PR is a lifetime record, not per-session.
+      void (async () => {
+        const db = await getDatabase();
+        const history = await listSetsForExercise(db, accountId, picked.id);
+        setPriorPrSummary(summarizeExercisePrs(history));
+      })();
     }
-  }, [route.params.pickedExercise, navigation]);
+  }, [route.params.pickedExercise, navigation, accountId]);
 
   const handleStart = async () => {
     const guestSession = await loadGuestSession();
@@ -115,6 +136,7 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
     const db = await getDatabase();
     const now = new Date().toISOString();
     const setNo = sets.filter((s) => s.exerciseId === pendingExercise.id).length + 1;
+    const setInput = { reps: parsedReps, weightKg: parsedWeight, isWarmup };
 
     await insertSet(db, {
       id: Crypto.randomUUID(),
@@ -131,7 +153,13 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
       updatedAt: now,
     });
     trackEvent("set_logged");
+    const flags = priorPrSummary ? detectNewPrs(priorPrSummary, setInput) : null;
+    if (flags && (flags.isWeightPr || flags.isRepPr || flags.isOneRmPr)) {
+      trackEvent("workout_pr_set");
+      setNewPrFlags(flags);
+    }
     setPendingExercise(null);
+    setPriorPrSummary(null);
     setReps("");
     setWeightKg("");
     setRpe("");
@@ -165,6 +193,14 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
           {pendingExercise ? (
             <View style={styles.form}>
               <Text style={styles.formTitle}>{pendingExercise.name}</Text>
+              {priorPrSummary && (priorPrSummary.bestWeightKg !== null || priorPrSummary.bestEstimatedOneRm !== null) ? (
+                <Text style={styles.prInfo}>
+                  Best: {priorPrSummary.bestWeightKg} kg
+                  {priorPrSummary.bestEstimatedOneRm !== null
+                    ? ` · Est. 1RM: ${priorPrSummary.bestEstimatedOneRm} kg`
+                    : ""}
+                </Text>
+              ) : null}
               <Text style={styles.label}>Reps</Text>
               <TextInput style={styles.input} keyboardType="numeric" value={reps} onChangeText={setReps} />
               <Text style={styles.label}>Weight (kg)</Text>
@@ -184,6 +220,7 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
             </View>
           ) : (
             <View style={styles.button}>
+              {newPrFlags ? <Text style={styles.prBanner}>{describeNewPr(newPrFlags)}</Text> : null}
               <Button
                 title="Add exercise"
                 onPress={() => navigation.navigate("ExerciseLibrary", { accountId, mode: "pickExercise" })}
@@ -221,6 +258,8 @@ const styles = StyleSheet.create({
   button: { marginTop: 12 },
   form: { marginTop: 8, padding: 12, borderWidth: 1, borderColor: "#eee", borderRadius: 8 },
   formTitle: { fontSize: 16, fontWeight: "600" },
+  prInfo: { color: "#666", marginTop: 4, fontSize: 13 },
+  prBanner: { color: "#0a7d2b", fontWeight: "600", marginBottom: 8, textAlign: "center" },
   label: { fontWeight: "600", marginTop: 10, marginBottom: 4 },
   input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 },
   warmupRow: { marginTop: 10 },

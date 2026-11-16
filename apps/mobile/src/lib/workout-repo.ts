@@ -166,6 +166,20 @@ export async function listSetsForSession(db: SqlDb, sessionId: string): Promise<
   return rows.map(fromSetRow);
 }
 
+/** Every non-deleted set ever logged for this exercise, across all sessions - the lifetime history
+ * PR comparison needs (a PR is a lifetime record, not a per-session one). */
+export async function listSetsForExercise(
+  db: SqlDb,
+  accountId: string,
+  exerciseId: string,
+): Promise<LocalWorkoutSet[]> {
+  const rows = await db.getAllAsync<WorkoutSetSqlRow>(
+    "SELECT * FROM workout_set WHERE account_id = ? AND exercise_id = ? AND is_deleted = 0",
+    [accountId, exerciseId],
+  );
+  return rows.map(fromSetRow);
+}
+
 export async function getDirtySets(db: SqlDb): Promise<LocalWorkoutSet[]> {
   const rows = await db.getAllAsync<WorkoutSetSqlRow>("SELECT * FROM workout_set WHERE is_dirty = 1");
   return rows.map(fromSetRow);

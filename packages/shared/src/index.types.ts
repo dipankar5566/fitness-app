@@ -5,3 +5,4 @@
 export * from "./targets.js";
 export * from "./schemas.js";
 export * from "./diet.js";
+export * from "./workout-prs.js";

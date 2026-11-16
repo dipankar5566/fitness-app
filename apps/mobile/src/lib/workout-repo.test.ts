@@ -10,6 +10,7 @@ import {
   getDirtySets,
   insertSession,
   insertSet,
+  listSetsForExercise,
   listSetsForSession,
   markSessionClean,
   markSetClean,
@@ -67,6 +68,18 @@ describe("workout-repo", () => {
     await insertSet(db, SET);
 
     expect(await listSetsForSession(db, SESSION.id)).toEqual([SET]);
+  });
+
+  it("listSetsForExercise finds a set's history across sessions, for lifetime PR comparison", async () => {
+    const earlierSession: LocalWorkoutSession = { ...SESSION, id: "33333333-3333-3333-3333-333333333333" };
+    const earlierSet: LocalWorkoutSet = { ...SET, id: "44444444-4444-4444-4444-444444444444", sessionId: earlierSession.id };
+    await insertSession(db, earlierSession);
+    await insertSet(db, earlierSet);
+    await insertSession(db, SESSION);
+    await insertSet(db, SET);
+
+    const history = await listSetsForExercise(db, "account-1", SET.exerciseId);
+    expect(history.map((s) => s.id).sort()).toEqual([earlierSet.id, SET.id].sort());
   });
 
   it("marks a dirty session/set clean only for the exact pushed version", async () => {

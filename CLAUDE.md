@@ -108,8 +108,27 @@ for both tables (including a real FK to an imported exercise id), psql spot-chec
 rows, plus unit tests in both `apps/api` (`sync.service.test.ts`) and `apps/mobile`
 (`workout-repo.test.ts`, `sync-engine.test.ts`).
 
-Still to do for M3: PRs (Epley 1RM, rep PRs - `workout_set_pr_idx` already exists for this), the 3
-built-in programs + home/no-equipment program, and the "follow program" flow.
+Fourth roadmap item done: PRs (Epley 1RM, rep PRs). `packages/shared/src/workout-prs.ts`
+(`summarizeExercisePrs`/`detectNewPrs`, pure and unit-tested per the formula rule below) reuses
+`targets.ts`'s existing `estimateOneRepMax` (already there, already tested, from M1/M2 scaffolding
+- found before writing a second Epley implementation) rather than duplicating it. Computed
+**entirely client-side** from the local SQLite mirror - no new API endpoint, since the account's
+full `workout_set` history is already there via `/sync`, and PR aggregation is a cheap pure
+function over it; `workout_set_pr_idx` remains there for when a server-side query needs it (e.g. a
+future stats page). "Rep PR" is tracked per distinct weight (`bestRepsByWeightKg`), not as a single
+number, since beating your rep count at an already-attempted weight is itself a PR even without
+lifting heavier - and a weight never attempted before registers as a PR too (first attempt = new
+best, not a non-event). `apps/mobile`'s `WorkoutSessionScreen` shows the current best weight/Est.
+1RM for the picked exercise above the set-entry form (fetched via the new `listSetsForExercise`
+in `workout-repo.ts`, refetched on every exercise pick so it reflects sets just logged moments
+earlier), and a "New PR -..." banner naming which record(s) a just-saved set broke. Verified via
+12 unit tests in `packages/shared` (including isolated cases like "more reps at a lighter weight
+beats a max-effort single's Epley estimate without being a weight PR") plus `workout-repo.test.ts`
+for the new lifetime-history query; no server-side change, so no curl/psql step was needed this
+time.
+
+Still to do for M3: the 3 built-in programs + home/no-equipment program, and the "follow program"
+flow.
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
