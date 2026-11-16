@@ -1,17 +1,26 @@
-import { detectNewPrs, summarizeExercisePrs, type ExercisePrSummary, type NewPrFlags } from "@fitness-app/shared";
+import {
+  detectNewPrs,
+  nextProgramDayId,
+  summarizeExercisePrs,
+  type ExercisePrSummary,
+  type NewPrFlags,
+} from "@fitness-app/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import { useCallback, useEffect, useState } from "react";
 import { Button, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { trackEvent } from "../lib/analytics";
+import { type Program, type ProgramDay } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
+import { FOLLOWED_PROGRAM_KEY, getKv } from "../lib/kv-store";
 import { syncNow } from "../lib/sync-engine";
 import {
   endSession,
   getActiveSession,
+  getLastUsedProgramDayId,
   insertSession,
   insertSet,
   listSetsForExercise,
@@ -47,6 +56,7 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
   const [pendingExercise, setPendingExercise] = useState<{ id: string; name: string } | null>(null);
   const [priorPrSummary, setPriorPrSummary] = useState<ExercisePrSummary | null>(null);
   const [newPrFlags, setNewPrFlags] = useState<NewPrFlags | null>(null);
+  const [todaysPlan, setTodaysPlan] = useState<ProgramDay | null>(null);
   const [reps, setReps] = useState("");
   const [weightKg, setWeightKg] = useState("");
   const [rpe, setRpe] = useState("");
@@ -58,6 +68,14 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
     const active = await getActiveSession(db, accountId);
     setSession(active);
     setSets(active ? await listSetsForSession(db, active.id) : []);
+
+    if (active?.programDayId) {
+      const cached = await getKv(db, FOLLOWED_PROGRAM_KEY);
+      const program = cached ? (JSON.parse(cached) as Program) : null;
+      setTodaysPlan(program?.days.find((day) => day.id === active.programDayId) ?? null);
+    } else {
+      setTodaysPlan(null);
+    }
   }, [accountId]);
 
   useFocusEffect(
@@ -66,31 +84,52 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
     }, [refresh]),
   );
 
+  // Shared by both "pick an exercise from the library" (via route params) and "tap a planned
+  // exercise from today's program day" - fetched fresh every time (even re-selecting the same
+  // exercise later in this session) so it reflects a set just logged moments ago, since a PR is a
+  // lifetime record, not a per-session one.
+  const selectExerciseToLog = useCallback(
+    async (exercise: { id: string; name: string }) => {
+      setPendingExercise(exercise);
+      setNewPrFlags(null);
+      const db = await getDatabase();
+      const history = await listSetsForExercise(db, accountId, exercise.id);
+      setPriorPrSummary(summarizeExercisePrs(history));
+    },
+    [accountId],
+  );
+
   useEffect(() => {
     const picked = route.params.pickedExercise;
     if (picked) {
-      setPendingExercise({ id: picked.id, name: picked.name });
-      setNewPrFlags(null);
       navigation.setParams({ pickedExercise: undefined });
-      // Fetched fresh on every pick (even re-picking the same exercise later in this session) so
-      // it reflects a set just logged moments ago - a PR is a lifetime record, not per-session.
-      void (async () => {
-        const db = await getDatabase();
-        const history = await listSetsForExercise(db, accountId, picked.id);
-        setPriorPrSummary(summarizeExercisePrs(history));
-      })();
+      void selectExerciseToLog({ id: picked.id, name: picked.name });
     }
-  }, [route.params.pickedExercise, navigation, accountId]);
+  }, [route.params.pickedExercise, navigation, selectExerciseToLog]);
 
   const handleStart = async () => {
     const guestSession = await loadGuestSession();
     if (!guestSession) return;
     const db = await getDatabase();
     const now = new Date().toISOString();
+
+    // "Follow a program -> today's session" (PRD section 5.4): if a program is followed, cycle to
+    // its next day based on which day this account last trained (no server-side "follows" table -
+    // ARCHITECTURE.md section 2 - so this is entirely local, reading the cached program JSON
+    // ProgramsScreen wrote when the user followed it).
+    let programDayId: string | null = null;
+    const cachedProgram = await getKv(db, FOLLOWED_PROGRAM_KEY);
+    if (cachedProgram) {
+      const program = JSON.parse(cachedProgram) as Program;
+      const dayIds = program.days.map((day) => day.id);
+      const lastUsedDayId = await getLastUsedProgramDayId(db, guestSession.accountId, dayIds);
+      programDayId = nextProgramDayId(dayIds, lastUsedDayId);
+    }
+
     await insertSession(db, {
       id: Crypto.randomUUID(),
       accountId: guestSession.accountId,
-      programDayId: null,
+      programDayId,
       startedAt: now,
       endedAt: null,
       isDeleted: false,
@@ -221,6 +260,23 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
           ) : (
             <View style={styles.button}>
               {newPrFlags ? <Text style={styles.prBanner}>{describeNewPr(newPrFlags)}</Text> : null}
+              {todaysPlan ? (
+                <View style={styles.plan}>
+                  <Text style={styles.planTitle}>Today's plan: {todaysPlan.name}</Text>
+                  {todaysPlan.exercises.map((exercise) => (
+                    <Pressable
+                      key={exercise.exerciseId}
+                      style={styles.planRow}
+                      onPress={() => void selectExerciseToLog({ id: exercise.exerciseId, name: exercise.exerciseName })}
+                    >
+                      <Text style={styles.planExercise}>{exercise.exerciseName}</Text>
+                      <Text style={styles.planTarget}>
+                        {exercise.targetSets} × {exercise.targetReps ?? "-"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
               <Button
                 title="Add exercise"
                 onPress={() => navigation.navigate("ExerciseLibrary", { accountId, mode: "pickExercise" })}
@@ -260,6 +316,17 @@ const styles = StyleSheet.create({
   formTitle: { fontSize: 16, fontWeight: "600" },
   prInfo: { color: "#666", marginTop: 4, fontSize: 13 },
   prBanner: { color: "#0a7d2b", fontWeight: "600", marginBottom: 8, textAlign: "center" },
+  plan: { marginBottom: 12, padding: 12, borderWidth: 1, borderColor: "#eee", borderRadius: 8 },
+  planTitle: { fontWeight: "600", marginBottom: 6 },
+  planRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#f3f3f3",
+  },
+  planExercise: { flex: 1 },
+  planTarget: { color: "#666" },
   label: { fontWeight: "600", marginTop: 10, marginBottom: 4 },
   input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 },
   warmupRow: { marginTop: 10 },

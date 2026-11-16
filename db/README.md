@@ -27,6 +27,12 @@ is a verbatim copy of `../indb/schema.sql`, per ARCHITECTURE.md).
   due end of M3) - `image_urls` instead points at jsdelivr's GitHub CDN
   (`cdn.jsdelivr.net/gh/<repo>@<sha>/...`), which unlike `raw.githubusercontent.com` is meant for
   hotlinking repo content and sets real cache headers.
+- `app.program`/`app.program_day`/`app.program_exercise` (created by `0002_app_schema.sql`) get the
+  4 built-in programs (PPL, upper/lower, full-body beginner, home/no-equipment - PRD section 5.4)
+  from `seed-programs.ts` (`pnpm seed:programs`, run after `pnpm import:exercises` since every
+  `exercise_id` has a hard FK to `app.exercise`). Re-runnable: every row's id is a deterministic
+  hash of a readable slug (these tables have no natural external key the way `app.exercise` does),
+  so a re-run always UPSERTs the same rows instead of duplicating them.
 
 ## Two supported setups
 1. **Reuse the existing local `indb` database** (fastest for development; already has real recipe

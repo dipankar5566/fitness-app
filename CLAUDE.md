@@ -69,7 +69,7 @@ Postgres `indb` database (not just unit tests):
 All three M2 roadmap items (`docs/ROADMAP.md`) - diet-type filtering, custom foods/recipes,
 offline logging + `/sync` v1 - are done.
 
-**M3 (Workouts) is in progress.** First roadmap item done: `app.exercise` (schema already existed
+**M3 (Workouts) is complete.** First roadmap item: `app.exercise` (schema already existed
 from `0002_app_schema.sql`) is populated by `db/import-exercises.ts` (`pnpm import:exercises`) from
 **free-exercise-db** (Unlicense/public domain, 876 exercises, PRD section 5.4/8), pinned to a
 specific commit SHA so a re-run can't silently change the dataset underneath us - verified against
@@ -127,8 +127,35 @@ beats a max-effort single's Epley estimate without being a weight PR") plus `wor
 for the new lifetime-history query; no server-side change, so no curl/psql step was needed this
 time.
 
-Still to do for M3: the 3 built-in programs + home/no-equipment program, and the "follow program"
-flow.
+Fifth/sixth roadmap items done: the 4 built-in programs (PPL, upper/lower, full-body beginner,
+home/no-equipment) and the "follow program" flow - **all of M3 is now done.** `app.program`/
+`app.program_day`/`app.program_exercise` (schema already existed from `0002_app_schema.sql`) are
+seeded by `db/seed-programs.ts` (`pnpm seed:programs`, run after `pnpm import:exercises` since
+every `exercise_id` has a hard FK to `app.exercise`) - every exercise in every program was looked
+up against the real imported data via psql, not guessed. Re-runnable the same way as the other
+seed/import scripts: each row's id is a deterministic hash of a readable slug (these tables have
+no natural external key the way `app.exercise` does), so a re-run always UPSERTs the same rows.
+`GET /program` (`apps/api/src/program/`) returns built-in programs with their days/exercises
+nested (joined against `app.exercise` for display names, 3 queries total - not N+1), unauthenticated
+like `/exercise`.
+
+**"Follow a program" is local-only state** - there's no server-side "account follows program X"
+table (checked `ARCHITECTURE.md` §2, nothing there). `apps/mobile`'s new `ProgramsScreen` (reachable
+from onboarding, which now routes there instead of straight to `Home` - PRD §5.4 "programs
+selectable in onboarding" - and from a `Home` button) caches the picked program's full JSON in
+`kv` under `FOLLOWED_PROGRAM_KEY`/`FOLLOWED_PROGRAM_ID_KEY` (moved into `kv-store.ts` itself since,
+unlike e.g. `HomeScreen`'s screen-local `CACHED_GOAL_KEY`, this key crosses a screen boundary -
+`ProgramsScreen` writes it, `WorkoutSessionScreen` reads it). `packages/shared/src/programs.ts`'s
+`nextProgramDayId` (pure, unit-tested) cycles through a followed program's days using
+`workout-repo.ts`'s new `getLastUsedProgramDayId` (the account's most recent session among that
+program's own day ids) - `WorkoutSessionScreen`'s "Start workout" sets the new session's
+`programDayId` from this before anything is logged. When a session has a `programDayId`, the
+screen shows "Today's plan" (that day's exercises with target sets/reps) as tappable rows that
+jump straight into the existing set-entry form (skipping the `ExerciseLibrary` picker) - `"Add
+exercise"` still works alongside it for anything off-plan. Verified against the real `indb`
+database: curl `GET /program` (4 programs, correct nested days/exercises), a full push/pull of a
+`workout_session` with a real `program_day_id` through `/sync` (FK holds), psql spot-check, plus
+unit tests in `apps/api`, `apps/mobile`, and `packages/shared`.
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
@@ -160,7 +187,8 @@ apps/
                        *.service.ts, *.module.ts. dev script uses tsc-watch, NOT tsx (see below).
                        Features so far: health, auth (guest JWT), food (search + detail),
                        food-log (manual meal log CRUD), profile (onboarding + targets), sync
-                       (push/pull), exercise (library + muscle/equipment filters).
+                       (push/pull), exercise (library + muscle/equipment filters), program
+                       (built-in program library, nested days/exercises).
   mobile/              Expo app (TypeScript, SDK 58), React Navigation stack. src/screens/,
                        src/lib/ (api.ts client, analytics.ts, auth-storage.ts, env.ts, db.ts),
                        src/components/ (ChipSelect, a generic enum picker reused across screens).

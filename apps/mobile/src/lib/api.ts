@@ -250,6 +250,40 @@ export async function searchExercises(
   return z.array(exerciseSchema).parse(await response.json());
 }
 
+const programExerciseSchema = z.object({
+  exerciseId: z.string(),
+  exerciseName: z.string(),
+  position: z.number(),
+  targetSets: z.number(),
+  targetReps: z.string().nullable(),
+});
+export type ProgramExercise = z.infer<typeof programExerciseSchema>;
+
+const programDaySchema = z.object({
+  id: z.string(),
+  dayIndex: z.number(),
+  name: z.string(),
+  exercises: z.array(programExerciseSchema),
+});
+export type ProgramDay = z.infer<typeof programDaySchema>;
+
+const programSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  days: z.array(programDaySchema),
+});
+export type Program = z.infer<typeof programSchema>;
+
+/** Built-in program library (PRD section 5.4) - no auth, same as searchExercises. */
+export async function listPrograms(apiUrl: string): Promise<Program[]> {
+  const response = await fetch(`${apiUrl}/program`);
+  if (!response.ok) {
+    throw new ApiError(`list programs failed with status ${response.status}`);
+  }
+  return z.array(programSchema).parse(await response.json());
+}
+
 export async function pushSync(
   apiUrl: string,
   accessToken: string,

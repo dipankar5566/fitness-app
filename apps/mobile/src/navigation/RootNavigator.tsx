@@ -11,6 +11,7 @@ import { IngredientQuantityScreen } from "../screens/IngredientQuantityScreen";
 import { LogFoodScreen } from "../screens/LogFoodScreen";
 import { MyFoodsScreen } from "../screens/MyFoodsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
+import { ProgramsScreen } from "../screens/ProgramsScreen";
 import { WorkoutSessionScreen } from "../screens/WorkoutSessionScreen";
 
 export interface PickedIngredient {
@@ -31,6 +32,7 @@ export type RootStackParamList = {
   ExerciseLibrary: { accountId: string; mode?: "pickExercise" };
   ExerciseDetail: { exercise: Exercise };
   WorkoutSession: { accountId: string; pickedExercise?: Exercise };
+  Programs: { accountId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -82,6 +84,7 @@ export function RootNavigator() {
           component={WorkoutSessionScreen}
           options={{ title: "Workout" }}
         />
+        <Stack.Screen name="Programs" component={ProgramsScreen} options={{ title: "Programs" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

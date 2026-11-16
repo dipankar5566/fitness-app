@@ -1,5 +1,12 @@
 import type { SqlDb } from "./sql-db";
 
+// Shared kv keys that cross screen boundaries (one screen writes, another reads) live here rather
+// than as a screen-local constant, unlike e.g. HomeScreen's own CACHED_GOAL_KEY which only that
+// screen ever touches. ProgramsScreen writes these when the user follows a program;
+// WorkoutSessionScreen reads them to determine "today's day" - PRD section 5.4.
+export const FOLLOWED_PROGRAM_ID_KEY = "followed_program_id";
+export const FOLLOWED_PROGRAM_KEY = "followed_program";
+
 export async function getKv(db: SqlDb, key: string): Promise<string | null> {
   const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key]);
   return row?.value ?? null;

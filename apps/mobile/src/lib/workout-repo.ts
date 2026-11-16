@@ -112,6 +112,27 @@ export async function endSession(db: SqlDb, id: string, endedAt: string, updated
   );
 }
 
+/** The program_day_id of the account's most recent session among `dayIds` (a followed program's
+ * own days) - what nextProgramDayId (packages/shared) needs to pick today's day in the cycle.
+ * Null if the account has never started a session for any of these days. */
+export async function getLastUsedProgramDayId(
+  db: SqlDb,
+  accountId: string,
+  dayIds: string[],
+): Promise<string | null> {
+  if (dayIds.length === 0) {
+    return null;
+  }
+  const placeholders = dayIds.map(() => "?").join(", ");
+  const row = await db.getFirstAsync<{ program_day_id: string }>(
+    `SELECT program_day_id FROM workout_session
+     WHERE account_id = ? AND program_day_id IN (${placeholders}) AND is_deleted = 0
+     ORDER BY started_at DESC LIMIT 1`,
+    [accountId, ...dayIds],
+  );
+  return row?.program_day_id ?? null;
+}
+
 export async function getDirtySessions(db: SqlDb): Promise<LocalWorkoutSession[]> {
   const rows = await db.getAllAsync<WorkoutSessionSqlRow>("SELECT * FROM workout_session WHERE is_dirty = 1");
   return rows.map(fromSessionRow);

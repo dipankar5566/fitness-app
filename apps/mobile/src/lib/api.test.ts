@@ -8,6 +8,7 @@ import {
   getProfile,
   isNetworkError,
   listFoodLog,
+  listPrograms,
   pullSync,
   pushSync,
   searchExercises,
@@ -219,6 +220,48 @@ describe("searchExercises", () => {
     );
 
     await expect(searchExercises("http://localhost:3001")).rejects.toThrow(ApiError);
+  });
+});
+
+describe("listPrograms", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches /program and returns the parsed, nested programs", async () => {
+    const programs = [
+      {
+        id: "program-1",
+        name: "Push / Pull / Legs",
+        description: "3-day split",
+        days: [
+          {
+            id: "day-1",
+            dayIndex: 0,
+            name: "Push",
+            exercises: [
+              { exerciseId: "Barbell_Bench_Press_-_Medium_Grip", exerciseName: "Barbell Bench Press", position: 0, targetSets: 4, targetReps: "6-10" },
+            ],
+          },
+        ],
+      },
+    ];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(programs), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const found = await listPrograms("http://localhost:3001");
+
+    expect(found).toEqual(programs);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/program");
+  });
+
+  it("throws ApiError when the request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 500 })),
+    );
+
+    await expect(listPrograms("http://localhost:3001")).rejects.toThrow(ApiError);
   });
 });
 

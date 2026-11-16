@@ -70,7 +70,10 @@ export function OnboardingScreen({ navigation, route }: Props) {
         goalMode,
       });
       trackEvent("onboarding_completed");
-      navigation.replace("Home", { accountId: route.params.accountId });
+      // Programs is the next stop, not Home - PRD section 5.4 ("programs selectable in
+      // onboarding"). ProgramsScreen itself navigates on to Home once the user follows one or
+      // skips.
+      navigation.replace("Programs", { accountId: route.params.accountId });
     } catch (err) {
       trackEvent("onboarding_failed");
       setError(

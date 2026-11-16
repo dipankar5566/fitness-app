@@ -8,6 +8,7 @@ import {
   getActiveSession,
   getDirtySessions,
   getDirtySets,
+  getLastUsedProgramDayId,
   insertSession,
   insertSet,
   listSetsForExercise,
@@ -61,6 +62,21 @@ describe("workout-repo", () => {
     await endSession(db, SESSION.id, "2026-11-16T09:00:00.000Z", "2026-11-16T09:00:00.000Z");
 
     expect(await getActiveSession(db, "account-1")).toBeNull();
+  });
+
+  it("getLastUsedProgramDayId finds the most recent session's day among a program's own days", async () => {
+    const dayOne = { ...SESSION, id: "55555555-5555-5555-5555-555555555555", programDayId: "day-1", startedAt: "2026-11-14T08:00:00.000Z" };
+    const dayTwo = { ...SESSION, id: "66666666-6666-6666-6666-666666666666", programDayId: "day-2", startedAt: "2026-11-16T08:00:00.000Z" };
+    await insertSession(db, dayOne);
+    await insertSession(db, dayTwo);
+
+    expect(await getLastUsedProgramDayId(db, "account-1", ["day-1", "day-2"])).toBe("day-2");
+  });
+
+  it("getLastUsedProgramDayId returns null when no session has ever used any of those days", async () => {
+    await insertSession(db, SESSION); // programDayId: null
+
+    expect(await getLastUsedProgramDayId(db, "account-1", ["day-1", "day-2"])).toBeNull();
   });
 
   it("round-trips a set through insertSet and listSetsForSession, including exerciseName", async () => {

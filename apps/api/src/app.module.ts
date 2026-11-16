@@ -7,6 +7,7 @@ import { FoodLogModule } from "./food-log/food-log.module.js";
 import { FoodModule } from "./food/food.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { ProfileModule } from "./profile/profile.module.js";
+import { ProgramModule } from "./program/program.module.js";
 import { SyncModule } from "./sync/sync.module.js";
 
 @Module({
@@ -17,6 +18,7 @@ import { SyncModule } from "./sync/sync.module.js";
     ExerciseModule,
     FoodModule,
     ProfileModule,
+    ProgramModule,
     FoodLogModule,
     SyncModule,
   ],
