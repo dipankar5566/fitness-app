@@ -1,6 +1,9 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import type { Exercise } from "../lib/api";
 import { CreateCustomFoodScreen } from "../screens/CreateCustomFoodScreen";
+import { ExerciseDetailScreen } from "../screens/ExerciseDetailScreen";
+import { ExerciseLibraryScreen } from "../screens/ExerciseLibraryScreen";
 import { FoodSearchScreen } from "../screens/FoodSearchScreen";
 import { GuestLoadingScreen } from "../screens/GuestLoadingScreen";
 import { HomeScreen } from "../screens/HomeScreen";
@@ -24,6 +27,8 @@ export type RootStackParamList = {
   MyFoods: { accountId: string };
   CreateCustomFood: { accountId: string; pickedIngredient?: PickedIngredient };
   IngredientQuantity: { accountId: string; foodCode: string };
+  ExerciseLibrary: undefined;
+  ExerciseDetail: { exercise: Exercise };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -59,6 +64,16 @@ export function RootNavigator() {
           name="IngredientQuantity"
           component={IngredientQuantityScreen}
           options={{ title: "Add ingredient" }}
+        />
+        <Stack.Screen
+          name="ExerciseLibrary"
+          component={ExerciseLibraryScreen}
+          options={{ title: "Exercises" }}
+        />
+        <Stack.Screen
+          name="ExerciseDetail"
+          component={ExerciseDetailScreen}
+          options={{ title: "Exercise" }}
         />
       </Stack.Navigator>
     </NavigationContainer>

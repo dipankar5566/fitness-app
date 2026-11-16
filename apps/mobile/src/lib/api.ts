@@ -224,6 +224,32 @@ export async function deleteFoodLog(
   }
 }
 
+const exerciseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  primaryMuscles: z.array(z.string()),
+  secondaryMuscles: z.array(z.string()),
+  equipment: z.string().nullable(),
+  instructions: z.array(z.string()),
+  imageUrls: z.array(z.string()),
+});
+export type Exercise = z.infer<typeof exerciseSchema>;
+
+export async function searchExercises(
+  apiUrl: string,
+  filter: { muscle?: string; equipment?: string } = {},
+): Promise<Exercise[]> {
+  const params = new URLSearchParams();
+  if (filter.muscle) params.set("muscle", filter.muscle);
+  if (filter.equipment) params.set("equipment", filter.equipment);
+  const query = params.toString();
+  const response = await fetch(`${apiUrl}/exercise${query ? `?${query}` : ""}`);
+  if (!response.ok) {
+    throw new ApiError(`exercise search failed with status ${response.status}`);
+  }
+  return z.array(exerciseSchema).parse(await response.json());
+}
+
 export async function pushSync(
   apiUrl: string,
   accessToken: string,

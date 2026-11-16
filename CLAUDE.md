@@ -69,6 +69,34 @@ Postgres `indb` database (not just unit tests):
 All three M2 roadmap items (`docs/ROADMAP.md`) - diet-type filtering, custom foods/recipes,
 offline logging + `/sync` v1 - are done.
 
+**M3 (Workouts) is in progress.** First roadmap item done: `app.exercise` (schema already existed
+from `0002_app_schema.sql`) is populated by `db/import-exercises.ts` (`pnpm import:exercises`) from
+**free-exercise-db** (Unlicense/public domain, 876 exercises, PRD section 5.4/8), pinned to a
+specific commit SHA so a re-run can't silently change the dataset underneath us - verified against
+the real `indb` database (876 rows, idempotent re-run, spot-checked muscles/equipment/image_urls
+via psql). **Image hosting**: no infra hosting decision exists yet (that's due end of M3 per
+`docs/ROADMAP.md`), so rather than standing up our own storage, `image_urls` points directly at
+jsdelivr's GitHub CDN (`cdn.jsdelivr.net/gh/<repo>@<sha>/...`) - unlike `raw.githubusercontent.com`,
+jsdelivr is explicitly meant for hotlinking repo content and serves real cache headers.
+
+Second roadmap item done: exercise library + filters. `GET /exercise` (`apps/api/src/exercise/`)
+filters `app.exercise` by muscle (checked against both primary and secondary via jsonb `@>`
+containment) and/or equipment, validated against the `exerciseMuscleSchema`/`exerciseEquipmentSchema`
+enums in `packages/shared` (fixed value sets from the free-exercise-db import, not open free text);
+always excludes `is_custom` rows since no custom-exercise creation flow exists yet to scope them by
+account. No auth guard - like `/food/search`, this is shared reference data. `apps/mobile`'s
+`ExerciseLibraryScreen` (two `ChipSelect` filters, reusing the same component as onboarding) ->
+`ExerciseDetailScreen` (instructions + image, passed via route params - no second network round
+trip for data already in hand) is wired to a new "Exercises" button on `HomeScreen`. Verified via
+curl against the real `indb` database (unfiltered count, muscle-only, equipment-only, combined,
+and a 400 on an invalid muscle value) plus unit tests in both `apps/api` and `apps/mobile`.
+
+Still to do for M3: workout session logger (offline, same `/sync` shape extended to
+`workout_session`/`workout_set` - the shared Zod schemas and sync-table enum already exist from
+M1/M2 scaffolding, but `sync.service.ts`'s per-table adapter registry isn't wired up for them yet),
+PRs (Epley 1RM, rep PRs), the 3 built-in programs + home/no-equipment program, and the "follow
+program" flow.
+
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
 now uses `unplugin-swc` with `decoratorMetadata: true` instead. Verified with `AuthService`'s test
@@ -98,7 +126,8 @@ apps/
   api/                 NestJS API (TypeScript, ESM). src/<feature>/*.controller.ts,
                        *.service.ts, *.module.ts. dev script uses tsc-watch, NOT tsx (see below).
                        Features so far: health, auth (guest JWT), food (search + detail),
-                       food-log (manual meal log CRUD), profile (onboarding + targets).
+                       food-log (manual meal log CRUD), profile (onboarding + targets), sync
+                       (push/pull), exercise (library + muscle/equipment filters).
   mobile/              Expo app (TypeScript, SDK 58), React Navigation stack. src/screens/,
                        src/lib/ (api.ts client, analytics.ts, auth-storage.ts, env.ts, db.ts),
                        src/components/ (ChipSelect, a generic enum picker reused across screens).

@@ -6,6 +6,7 @@
   "scripts": {
     "migrate": "tsx migrate.ts",
     "backfill:diet": "tsx backfill-diet-class.ts",
+    "import:exercises": "tsx import-exercises.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

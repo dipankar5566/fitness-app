@@ -20,6 +20,13 @@ is a verbatim copy of `../indb/schema.sql`, per ARCHITECTURE.md).
   classification keyed by `food_code`, backfilled by `backfill-diet-class.ts` (`pnpm backfill:diet`).
   Deliberately not a column on `public.food` - that schema is read-only from app code and gets
   truncated/reloaded by `indb/load.py`.
+- `app.exercise` (created by `0002_app_schema.sql`) is populated by `import-exercises.ts`
+  (`pnpm import:exercises`) from **free-exercise-db** (Unlicense/public domain, PRD section 5.4/8),
+  pinned to a specific commit SHA so a re-run can't silently change the dataset. Exercise images
+  aren't downloaded into our own storage - there's no hosting decision yet (ARCHITECTURE.md,
+  due end of M3) - `image_urls` instead points at jsdelivr's GitHub CDN
+  (`cdn.jsdelivr.net/gh/<repo>@<sha>/...`), which unlike `raw.githubusercontent.com` is meant for
+  hotlinking repo content and sets real cache headers.
 
 ## Two supported setups
 1. **Reuse the existing local `indb` database** (fastest for development; already has real recipe

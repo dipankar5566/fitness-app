@@ -118,6 +118,46 @@ export const syncPullResponseSchema = z.object({
 });
 export type SyncPullResponse = z.infer<typeof syncPullResponseSchema>;
 
+// Exercise library — PRD §5.4. Fixed value sets from free-exercise-db (db/import-exercises.ts),
+// not an open free-text field — lets both apps/api (query validation) and apps/mobile (filter chips)
+// share one enum instead of each hand-maintaining the same list.
+export const exerciseMuscleSchema = z.enum([
+  "abdominals",
+  "abductors",
+  "adductors",
+  "biceps",
+  "calves",
+  "chest",
+  "forearms",
+  "glutes",
+  "hamstrings",
+  "lats",
+  "lower back",
+  "middle back",
+  "neck",
+  "quadriceps",
+  "shoulders",
+  "traps",
+  "triceps",
+]);
+export type ExerciseMuscle = z.infer<typeof exerciseMuscleSchema>;
+
+export const exerciseEquipmentSchema = z.enum([
+  "bands",
+  "barbell",
+  "body only",
+  "cable",
+  "dumbbell",
+  "e-z curl bar",
+  "exercise ball",
+  "foam roll",
+  "kettlebells",
+  "machine",
+  "medicine ball",
+  "other",
+]);
+export type ExerciseEquipment = z.infer<typeof exerciseEquipmentSchema>;
+
 // Profile / goal — PRD §5.1.
 export const dietTypeSchema = z.enum(["veg", "eggetarian", "non_veg", "vegan", "jain"]);
 export type DietType = z.infer<typeof dietTypeSchema>;

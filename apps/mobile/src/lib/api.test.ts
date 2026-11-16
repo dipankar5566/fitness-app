@@ -10,6 +10,7 @@ import {
   listFoodLog,
   pullSync,
   pushSync,
+  searchExercises,
   searchFoods,
   submitOnboarding,
 } from "./api";
@@ -171,6 +172,53 @@ describe("searchFoods", () => {
     );
 
     await expect(searchFoods("http://localhost:3001", "idli")).rejects.toThrow(ApiError);
+  });
+});
+
+describe("searchExercises", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("with no filter, calls the endpoint with no query string", async () => {
+    const results = [
+      {
+        id: "Bench_Press",
+        name: "Bench Press",
+        primaryMuscles: ["chest"],
+        secondaryMuscles: ["triceps"],
+        equipment: "barbell",
+        instructions: ["Lie down.", "Press up."],
+        imageUrls: ["https://cdn.jsdelivr.net/gh/x/0.jpg"],
+      },
+    ];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(results), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const found = await searchExercises("http://localhost:3001");
+
+    expect(found).toEqual(results);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/exercise");
+  });
+
+  it("builds a query string from muscle and equipment filters", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify([]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await searchExercises("http://localhost:3001", { muscle: "chest", equipment: "barbell" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:3001/exercise?muscle=chest&equipment=barbell",
+    );
+  });
+
+  it("throws ApiError when the request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 500 })),
+    );
+
+    await expect(searchExercises("http://localhost:3001")).rejects.toThrow(ApiError);
   });
 });
 
