@@ -102,6 +102,42 @@ describe("FoodLogService", () => {
 
       expect(entry.macros).toBeNull();
     });
+
+    it("computes macros for a custom-food entry from its indb-sourced ingredients", async () => {
+      db.query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "log-1",
+              account_id: "account-1",
+              food_source: "custom",
+              food_ref: "custom-food-1",
+              quantity: "100", // grams of the recipe logged
+              unit: "g",
+              meal_type: "snack",
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { custom_food_id: "custom-food-1", food_source: "indb", food_ref: "L002", quantity_g: "50" },
+          ],
+        });
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["L002", { kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
+        ]),
+      );
+
+      const [entry] = await service.listByDate("account-1", "2026-11-14");
+
+      expect(entry.macros).toEqual({ kcal: 130, proteinG: 2.7, fatG: 0.3, carbG: 28 });
+      expect(db.query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("FROM app.custom_food_ingredient"),
+        [["custom-food-1"]],
+      );
+    });
   });
 
   describe("update and softDelete ownership checks", () => {

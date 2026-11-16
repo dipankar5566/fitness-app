@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getDirtyCustomFoods, insertCustomFood, listCustomFoods, type LocalCustomFood } from "./custom-food-repo.js";
 import { getDirty, insert, listByLocalDay, type LocalFoodLogRow } from "./food-log-repo.js";
 import { getKv } from "./kv-store.js";
 import { createTestDb } from "./node-sqlite-test-db.js";
@@ -108,6 +109,57 @@ describe("sync-engine", () => {
     await expect(syncNow(db, "http://localhost:3001", "token-1")).resolves.toBeUndefined();
 
     expect((await getDirty(db)).map((row) => row.id)).toEqual([ROW.id]);
+  });
+
+  it("pushes dirty rows across tables in one call, and routes a pulled custom_food change to its own repo", async () => {
+    const { pushSync, pullSync } = await import("./api.js");
+    const customFood: LocalCustomFood = {
+      id: "33333333-3333-3333-3333-333333333333",
+      accountId: "account-1",
+      name: "Overnight oats",
+      isDeleted: false,
+      updatedAt: "2026-11-16T12:00:00.000Z",
+    };
+    (pushSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      applied: [ROW.id, customFood.id],
+      rejected: [],
+    });
+    (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      changes: [
+        {
+          table: "custom_food",
+          op: "upsert",
+          row: {
+            id: "44444444-4444-4444-4444-444444444444",
+            accountId: "account-1",
+            isDeleted: false,
+            updatedAt: "2026-11-16T13:00:00.000Z",
+            name: "Pulled from another device",
+          },
+        },
+      ],
+      nextSyncToken: "2026-11-16T13:00:00.000Z",
+    });
+    await insert(db, ROW);
+    await insertCustomFood(db, customFood);
+
+    const { syncNow } = await import("./sync-engine.js");
+    await syncNow(db, "http://localhost:3001", "token-1");
+
+    expect(pushSync).toHaveBeenCalledWith(
+      "http://localhost:3001",
+      "token-1",
+      expect.objectContaining({
+        rows: expect.arrayContaining([
+          expect.objectContaining({ table: "food_log" }),
+          expect.objectContaining({ table: "custom_food" }),
+        ]),
+      }),
+    );
+    expect(await getDirty(db)).toEqual([]);
+    expect(await getDirtyCustomFoods(db)).toEqual([]);
+    const customFoods = await listCustomFoods(db, "account-1");
+    expect(customFoods.map((f) => f.name)).toContain("Pulled from another device");
   });
 
   it("collapses overlapping calls into a single run", async () => {

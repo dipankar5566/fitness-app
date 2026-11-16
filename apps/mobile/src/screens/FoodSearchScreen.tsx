@@ -75,10 +75,15 @@ export function FoodSearchScreen({ navigation, route }: Props) {
           <Pressable
             style={styles.resultRow}
             onPress={() =>
-              navigation.navigate("LogFood", {
-                accountId: route.params.accountId,
-                foodCode: item.code,
-              })
+              route.params.mode === "pickIngredient"
+                ? navigation.navigate("IngredientQuantity", {
+                    accountId: route.params.accountId,
+                    foodCode: item.code,
+                  })
+                : navigation.navigate("LogFood", {
+                    accountId: route.params.accountId,
+                    foodCode: item.code,
+                  })
             }
           >
             <Text style={styles.resultName}>{item.name}</Text>

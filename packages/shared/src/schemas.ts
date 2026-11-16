@@ -66,8 +66,29 @@ export const workoutSessionSchema = syncableBaseSchema.extend({
 });
 export type WorkoutSession = z.infer<typeof workoutSessionSchema>;
 
+export const customFoodSchema = syncableBaseSchema.extend({
+  name: z.string().min(1),
+});
+export type CustomFood = z.infer<typeof customFoodSchema>;
+
+export const customFoodIngredientSchema = syncableBaseSchema.extend({
+  customFoodId: z.string().uuid(),
+  foodSource: foodSourceSchema,
+  foodRef: z.string(),
+  quantityG: z.number().positive(),
+});
+export type CustomFoodIngredient = z.infer<typeof customFoodIngredientSchema>;
+
 // Generic sync envelope — one push/pull protocol for every syncable table (ARCHITECTURE.md §3).
-export const syncTableNameSchema = z.enum(["food_log", "workout_session", "workout_set", "body_metric"]);
+export const syncTableNameSchema = z.enum([
+  "food_log",
+  "custom_food",
+  "custom_food_ingredient",
+  "workout_session",
+  "workout_set",
+  "body_metric",
+]);
+export type SyncTableName = z.infer<typeof syncTableNameSchema>;
 
 export const syncPushRowSchema = z.object({
   table: syncTableNameSchema,

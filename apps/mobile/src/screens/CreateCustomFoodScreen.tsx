@@ -1,0 +1,137 @@
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import * as Crypto from "expo-crypto";
+import { useEffect, useState } from "react";
+import { Button, FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import { trackEvent } from "../lib/analytics";
+import { loadGuestSession } from "../lib/auth-storage";
+import { insertCustomFood, insertIngredient } from "../lib/custom-food-repo";
+import { getDatabase } from "../lib/db";
+import { API_URL } from "../lib/env";
+import { syncNow } from "../lib/sync-engine";
+import type { PickedIngredient, RootStackParamList } from "../navigation/RootNavigator";
+
+type Props = NativeStackScreenProps<RootStackParamList, "CreateCustomFood">;
+
+/** Create-only in v1 (no editing an existing recipe) - nothing is written to SQLite until "Save",
+ * so the ingredient list lives in component state while building. "Add ingredient" hands off to
+ * FoodSearchScreen in pick mode, which hands the result back via route.params.pickedIngredient
+ * (the standard React Navigation "pass params back to a screen already in the stack" pattern). */
+export function CreateCustomFoodScreen({ navigation, route }: Props) {
+  const { accountId } = route.params;
+  const [name, setName] = useState("");
+  const [ingredients, setIngredients] = useState<PickedIngredient[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const picked = route.params.pickedIngredient;
+    if (picked) {
+      setIngredients((current) => [...current, picked]);
+      navigation.setParams({ pickedIngredient: undefined });
+    }
+  }, [route.params.pickedIngredient, navigation]);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      setError("Give this recipe a name.");
+      return;
+    }
+    if (ingredients.length === 0) {
+      setError("Add at least one ingredient.");
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    try {
+      const session = await loadGuestSession();
+      if (!session) {
+        throw new Error("No guest session");
+      }
+      const db = await getDatabase();
+      const customFoodId = Crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      await insertCustomFood(db, {
+        id: customFoodId,
+        accountId: session.accountId,
+        name: name.trim(),
+        isDeleted: false,
+        updatedAt: now,
+      });
+      for (const ingredient of ingredients) {
+        await insertIngredient(db, {
+          id: Crypto.randomUUID(),
+          accountId: session.accountId,
+          customFoodId,
+          foodSource: "indb",
+          foodRef: ingredient.foodRef,
+          quantityG: ingredient.quantityG,
+          isDeleted: false,
+          updatedAt: now,
+        });
+      }
+
+      trackEvent("custom_food_created");
+      void syncNow(db, API_URL, session.accessToken);
+      navigation.navigate("MyFoods", { accountId });
+    } catch {
+      setError("Something went wrong.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.label}>Name</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="e.g. Overnight oats"
+        value={name}
+        onChangeText={setName}
+      />
+
+      <Text style={styles.label}>Ingredients</Text>
+      <FlatList
+        data={ingredients}
+        keyExtractor={(item, index) => `${item.foodRef}-${index}`}
+        renderItem={({ item }) => (
+          <View style={styles.ingredientRow}>
+            <Text>{item.name}</Text>
+            <Text style={styles.ingredientGrams}>{item.quantityG}g</Text>
+          </View>
+        )}
+        ListEmptyComponent={<Text style={styles.empty}>No ingredients added yet.</Text>}
+      />
+      <View style={styles.addButton}>
+        <Button
+          title="+ Add ingredient"
+          onPress={() => navigation.navigate("FoodSearch", { accountId, mode: "pickIngredient" })}
+        />
+      </View>
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={styles.saveButton}>
+        <Button title={isSaving ? "Saving..." : "Save recipe"} onPress={handleSave} disabled={isSaving} />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 24 },
+  label: { fontWeight: "600", marginTop: 16, marginBottom: 6 },
+  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10 },
+  ingredientRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  ingredientGrams: { color: "#666" },
+  empty: { color: "#888", marginTop: 8 },
+  addButton: { marginTop: 12 },
+  error: { color: "#c00", textAlign: "center", marginTop: 16 },
+  saveButton: { marginTop: 24 },
+});

@@ -58,22 +58,124 @@ function computeMacros(grams: number | null, summary: FoodNutrientSummary): Macr
   };
 }
 
-/** Enriches raw food_log rows with real macros for indb-sourced rows (ARCHITECTURE.md §2). Pulled out
- * of `listByDate` so the sync pull path (which also returns food_log rows) can reuse it. */
+interface CustomFoodIngredientRow {
+  custom_food_id: string;
+  food_source: string;
+  food_ref: string;
+  quantity_g: string;
+}
+
+/** Per-gram-of-whole-recipe macros for each custom_food id that has at least one indb-sourced
+ * ingredient with known nutrients. Nested custom/packaged sub-ingredients don't contribute (v1
+ * limitation - same spirit as packaged-food/OFF integration being its own later milestone). */
+async function computeCustomFoodMacrosPerGram(
+  customFoodIds: string[],
+  food: FoodService,
+  db: DatabaseService,
+): Promise<Map<string, MacroBreakdown>> {
+  const perGramById = new Map<string, MacroBreakdown>();
+  if (customFoodIds.length === 0) {
+    return perGramById;
+  }
+
+  const ingredients = await db.query<CustomFoodIngredientRow>(
+    `SELECT custom_food_id, food_source, food_ref, quantity_g FROM app.custom_food_ingredient
+     WHERE custom_food_id = ANY($1) AND is_deleted = false`,
+    [customFoodIds],
+  );
+
+  const indbRefs = [
+    ...new Set(ingredients.rows.filter((row) => row.food_source === "indb").map((row) => row.food_ref)),
+  ];
+  const summaryByCode = await food.getNutrientSummaries(indbRefs);
+
+  const byCustomFoodId = new Map<string, CustomFoodIngredientRow[]>();
+  for (const ingredient of ingredients.rows) {
+    const list = byCustomFoodId.get(ingredient.custom_food_id) ?? [];
+    list.push(ingredient);
+    byCustomFoodId.set(ingredient.custom_food_id, list);
+  }
+
+  for (const [customFoodId, recipeIngredients] of byCustomFoodId) {
+    let totalGrams = 0;
+    let kcal = 0;
+    let proteinG = 0;
+    let fatG = 0;
+    let carbG = 0;
+    let hasKnownIngredient = false;
+
+    for (const ingredient of recipeIngredients) {
+      const grams = Number(ingredient.quantity_g);
+      totalGrams += grams;
+      const summary = ingredient.food_source === "indb" ? summaryByCode.get(ingredient.food_ref) : undefined;
+      if (!summary) {
+        continue;
+      }
+      hasKnownIngredient = true;
+      const scale = grams / 100;
+      kcal += (summary.kcalPer100g ?? 0) * scale;
+      proteinG += (summary.proteinGPer100g ?? 0) * scale;
+      fatG += (summary.fatGPer100g ?? 0) * scale;
+      carbG += (summary.carbGPer100g ?? 0) * scale;
+    }
+
+    if (hasKnownIngredient && totalGrams > 0) {
+      perGramById.set(customFoodId, {
+        kcal: kcal / totalGrams,
+        proteinG: proteinG / totalGrams,
+        fatG: fatG / totalGrams,
+        carbG: carbG / totalGrams,
+      });
+    }
+  }
+
+  return perGramById;
+}
+
+/** Enriches raw food_log rows with real macros for indb-sourced rows (ARCHITECTURE.md §2) and
+ * custom-food rows (sum of each recipe's indb-sourced ingredients, scaled by grams logged). Pulled
+ * out of `listByDate` so the sync pull path (which also returns food_log rows) can reuse it. */
 export async function enrichWithMacros(
   rows: FoodLogRow[],
   food: FoodService,
+  db: DatabaseService,
 ): Promise<FoodLogEntryWithMacros[]> {
   const indbCodes = [...new Set(rows.filter((row) => row.food_source === "indb").map((row) => row.food_ref))];
+  const customFoodIds = [...new Set(rows.filter((row) => row.food_source === "custom").map((row) => row.food_ref))];
+
   const summaryByCode = await food.getNutrientSummaries(indbCodes);
+  const perGramByCustomFoodId = await computeCustomFoodMacrosPerGram(customFoodIds, food, db);
 
   return rows.map((row) => {
-    const summary = row.food_source === "indb" ? summaryByCode.get(row.food_ref) : undefined;
-    if (!summary) {
-      return { ...row, macros: null };
+    if (row.food_source === "indb") {
+      const summary = summaryByCode.get(row.food_ref);
+      if (!summary) {
+        return { ...row, macros: null };
+      }
+      const grams = resolveGrams(Number(row.quantity), row.unit, summary.servingGramsByName);
+      return { ...row, macros: computeMacros(grams, summary) };
     }
-    const grams = resolveGrams(Number(row.quantity), row.unit, summary.servingGramsByName);
-    return { ...row, macros: computeMacros(grams, summary) };
+
+    if (row.food_source === "custom") {
+      const perGram = perGramByCustomFoodId.get(row.food_ref);
+      if (!perGram) {
+        return { ...row, macros: null };
+      }
+      const gramsLogged = Number(row.quantity); // custom foods: quantity is always grams of the recipe
+      const scaled = (perGramValue: number | null) =>
+        perGramValue === null ? null : Math.round(perGramValue * gramsLogged * 10) / 10;
+      return {
+        ...row,
+        macros: {
+          kcal: scaled(perGram.kcal),
+          proteinG: scaled(perGram.proteinG),
+          fatG: scaled(perGram.fatG),
+          carbG: scaled(perGram.carbG),
+        },
+      };
+    }
+
+    return { ...row, macros: null };
   });
 }
 
@@ -117,7 +219,7 @@ export class FoodLogService {
       [accountId, start, end],
     );
 
-    return enrichWithMacros(result.rows, this.food);
+    return enrichWithMacros(result.rows, this.food, this.db);
   }
 
   async update(accountId: string, id: string, patch: UpdateFoodLogRequest): Promise<FoodLogRow> {

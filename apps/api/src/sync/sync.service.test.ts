@@ -118,30 +118,114 @@ describe("SyncService", () => {
         rejected: [{ id: "bad-row", reason: "invalid" }],
       });
     });
+
+    it("rejects an unregistered table as invalid", async () => {
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "workout_session", op: "upsert", row: { id: "ws-1" } }],
+      });
+
+      expect(result).toEqual({ applied: [], rejected: [{ id: "ws-1", reason: "invalid" }] });
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it("upserts a custom_food row through the registry, account_id from the JWT", async () => {
+      client.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const row = {
+        id: "33333333-3333-3333-3333-333333333333",
+        accountId: "99999999-9999-9999-9999-999999999999", // must be ignored - account comes from the JWT
+        isDeleted: false,
+        updatedAt: "2026-11-14T12:00:00.000Z",
+        name: "Overnight oats",
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "custom_food", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [row.id], rejected: [] });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO app.custom_food"),
+        expect.arrayContaining(["account-1", "Overnight oats"]),
+      );
+    });
+
+    it("upserts a custom_food_ingredient row through the registry", async () => {
+      client.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const row = {
+        id: "44444444-4444-4444-4444-444444444444",
+        accountId: "99999999-9999-9999-9999-999999999999",
+        isDeleted: false,
+        updatedAt: "2026-11-14T12:00:00.000Z",
+        customFoodId: "33333333-3333-3333-3333-333333333333",
+        foodSource: "indb",
+        foodRef: "L002",
+        quantityG: 40,
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "custom_food_ingredient", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [row.id], rejected: [] });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO app.custom_food_ingredient"),
+        expect.arrayContaining(["account-1", row.customFoodId, "indb", "L002", 40]),
+      );
+    });
+
+    it("looks up the custom_food table for a custom_food conflict reason", async () => {
+      client.query
+        .mockResolvedValueOnce({ rowCount: 0 })
+        .mockResolvedValueOnce({ rows: [{ account_id: "someone-else" }] });
+
+      const row = {
+        id: "33333333-3333-3333-3333-333333333333",
+        accountId: "99999999-9999-9999-9999-999999999999",
+        isDeleted: false,
+        updatedAt: "2026-11-14T12:00:00.000Z",
+        name: "Overnight oats",
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "custom_food", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [], rejected: [{ id: row.id, reason: "not_owner" }] });
+      expect(client.query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("FROM app.custom_food WHERE"),
+        [row.id],
+      );
+    });
   });
 
   describe("pull", () => {
     it("advances the sync token to the last row's server_updated_at and applies the overlap window", async () => {
       const serverUpdatedAt = new Date("2026-11-15T00:00:00.000Z");
-      db.query.mockResolvedValue({
-        rows: [
-          {
-            id: validUpsertRow.id,
-            account_id: "account-1",
-            food_source: "indb",
-            food_ref: "L002",
-            quantity: "150",
-            unit: "g",
-            meal_type: "lunch",
-            logged_at: new Date("2026-11-14T12:00:00.000Z"),
-            source: "manual",
-            is_estimate: false,
-            is_deleted: false,
-            updated_at: new Date("2026-11-14T12:00:00.000Z"),
-            server_updated_at: serverUpdatedAt,
-          },
-        ],
-      });
+      db.query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: validUpsertRow.id,
+              account_id: "account-1",
+              food_source: "indb",
+              food_ref: "L002",
+              quantity: "150",
+              unit: "g",
+              meal_type: "lunch",
+              logged_at: new Date("2026-11-14T12:00:00.000Z"),
+              source: "manual",
+              is_estimate: false,
+              is_deleted: false,
+              updated_at: new Date("2026-11-14T12:00:00.000Z"),
+              server_updated_at: serverUpdatedAt,
+            },
+          ],
+        })
+        .mockResolvedValue({ rows: [] }); // custom_food / custom_food_ingredient: nothing changed
 
       const since = "2026-11-14T23:59:00.000Z";
       const result = await service.pull("account-1", since);
@@ -153,6 +237,55 @@ describe("SyncService", () => {
       const [, params] = db.query.mock.calls[0] as [string, unknown[]];
       expect(params[0]).toBe("account-1");
       expect(params[1]).toBe(new Date(new Date(since).getTime() - 5000).toISOString());
+    });
+
+    it("merges changes across tables under one token, taking the max server_updated_at", async () => {
+      const foodLogUpdatedAt = new Date("2026-11-15T00:00:00.000Z");
+      const customFoodUpdatedAt = new Date("2026-11-15T01:00:00.000Z"); // later than food_log's
+      db.query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: validUpsertRow.id,
+              account_id: "account-1",
+              food_source: "indb",
+              food_ref: "L002",
+              quantity: "150",
+              unit: "g",
+              meal_type: "lunch",
+              logged_at: new Date("2026-11-14T12:00:00.000Z"),
+              source: "manual",
+              is_estimate: false,
+              is_deleted: false,
+              updated_at: new Date("2026-11-14T12:00:00.000Z"),
+              server_updated_at: foodLogUpdatedAt,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "33333333-3333-3333-3333-333333333333",
+              account_id: "account-1",
+              name: "Overnight oats",
+              is_deleted: false,
+              updated_at: new Date("2026-11-14T12:00:00.000Z"),
+              server_updated_at: customFoodUpdatedAt,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const result = await service.pull("account-1", null);
+
+      expect(result.nextSyncToken).toBe(customFoodUpdatedAt.toISOString());
+      expect(result.changes).toHaveLength(2);
+      expect(result.changes[0]).toMatchObject({ table: "food_log", op: "upsert" });
+      expect(result.changes[1]).toMatchObject({
+        table: "custom_food",
+        op: "upsert",
+        row: { name: "Overnight oats" },
+      });
     });
 
     it("returns the previous token unchanged when there are no changes", async () => {

@@ -34,12 +34,26 @@ local Postgres `indb` database (not just unit tests):
   pull via curl against the real `indb` database, plus unit tests in both `apps/api` and
   `apps/mobile` (the mobile ones run real SQL against `node:sqlite`, not a mock, since expo-sqlite
   can't load outside React Native - see `node-sqlite-test-db.ts`).
+- Custom foods/recipes, offline-capable: `app.custom_food`/`app.custom_food_ingredient` got the
+  same sync shape as `food_log` (`0004_custom_food_sync.sql`), and `sync.service.ts`'s `push()`/
+  `pull()` are now a small per-table adapter registry instead of being hardcoded to `food_log` -
+  `custom_food`/`custom_food_ingredient` are the second and third tables wired into it (workout/
+  body-metric tables join the same way once their M3 screens exist). Macros for a logged custom
+  food are computed server-side exactly like an indb food - no new endpoint, no local macro cache:
+  `enrichWithMacros` gained a `food_source === "custom"` branch that sums the recipe's indb-sourced
+  ingredients and scales by the grams logged (nested custom/packaged sub-ingredients don't
+  contribute macros, a documented v1 limitation). `apps/mobile`'s `MyFoodsScreen` (list/log/delete)
+  and `CreateCustomFoodScreen` (name + ingredients, create-only - no edit flow in v1) read/write the
+  new local `custom_food`/`custom_food_ingredient` tables via `custom-food-repo.ts`, following the
+  same outbox pattern as `food-log-repo.ts`; `sync-engine.ts` pushes/pulls all three tables in one
+  round trip. Verified end-to-end via curl (push a recipe + ingredient, log it, pull, confirm the
+  computed macros match hand-calculated values from the ingredient's per-100g nutrients) plus unit
+  tests in both apps.
 
 **Still open in M2** (`docs/ROADMAP.md`): diet-type filtering - **blocked**, the `indb` schema
 (`db/migrations/0001_indb.sql`) carries no veg/non-veg/vegan metadata on `food`/`food_name`, so
 this needs a data-model addition (new column + backfill) before it's implementable, not just UI
-work; custom foods/recipes (`app.custom_food`/`app.custom_food_ingredient` tables already exist,
-unused).
+work.
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
