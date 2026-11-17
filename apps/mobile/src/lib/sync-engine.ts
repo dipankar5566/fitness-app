@@ -1,6 +1,12 @@
 import { trackEvent } from "./analytics";
 import { isNetworkError, pullSync, pushSync } from "./api";
 import {
+  applyRemote as applyRemoteBodyMetrics,
+  getDirty as getDirtyBodyMetrics,
+  markClean as markBodyMetricClean,
+  type RemoteBodyMetric,
+} from "./body-metric-repo";
+import {
   applyRemoteCustomFoods,
   applyRemoteIngredients,
   getDirtyCustomFoods,
@@ -29,7 +35,9 @@ const SYNC_TOKEN_KEY = "sync_token";
 let inFlight: Promise<void> | null = null;
 
 /**
- * Pushes dirty food_log rows, then pulls everything since the last sync token (ARCHITECTURE.md §3).
+ * Pushes dirty rows across all six syncable tables (food_log, custom_food,
+ * custom_food_ingredient, workout_session, workout_set, body_metric), then pulls everything since
+ * the last sync token (ARCHITECTURE.md §3).
  * A module-level guard collapses overlapping calls (app start, after a write, foreground) into one
  * run. Network failures are swallowed - rows just stay dirty and go out next time; anything else
  * (a real server error) is reported and rethrown so callers can decide whether to surface it.
@@ -63,13 +71,15 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
   const dirtyIngredients = await getDirtyIngredients(db);
   const dirtySessions = await getDirtySessions(db);
   const dirtySets = await getDirtySets(db);
+  const dirtyBodyMetrics = await getDirtyBodyMetrics(db);
 
   if (
     dirtyFoodLog.length === 0 &&
     dirtyCustomFoods.length === 0 &&
     dirtyIngredients.length === 0 &&
     dirtySessions.length === 0 &&
-    dirtySets.length === 0
+    dirtySets.length === 0 &&
+    dirtyBodyMetrics.length === 0
   ) {
     return;
   }
@@ -120,6 +130,15 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
           weightKg: row.weightKg, rpe: row.rpe ?? undefined, isWarmup: row.isWarmup,
         },
       })),
+      ...dirtyBodyMetrics.map((row) => ({
+        table: "body_metric" as const,
+        op: row.isDeleted ? ("delete" as const) : ("upsert" as const),
+        row: {
+          id: row.id, accountId: row.accountId, isDeleted: row.isDeleted, updatedAt: row.updatedAt,
+          metricType: row.metricType, value: row.value ?? undefined, photoRef: row.photoRef ?? undefined,
+          recordedAt: row.recordedAt,
+        },
+      })),
     ],
   });
 
@@ -151,6 +170,11 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
       await markSetClean(db, row.id, row.updatedAt);
     }
   }
+  for (const row of dirtyBodyMetrics) {
+    if (appliedIds.has(row.id)) {
+      await markBodyMetricClean(db, row.id, row.updatedAt);
+    }
+  }
 }
 
 async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Promise<void> {
@@ -162,6 +186,7 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
   const ingredientRows: LocalCustomFoodIngredient[] = [];
   const sessionRows: RemoteWorkoutSession[] = [];
   const setRows: RemoteWorkoutSet[] = [];
+  const bodyMetricRows: RemoteBodyMetric[] = [];
 
   for (const change of response.changes) {
     const row = change.row as Record<string, unknown>;
@@ -226,6 +251,17 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
         isDeleted,
         updatedAt: row.updatedAt as string,
       });
+    } else if (change.table === "body_metric") {
+      bodyMetricRows.push({
+        id: row.id as string,
+        accountId: row.accountId as string,
+        metricType: row.metricType as string,
+        value: (row.value as number | undefined) ?? null,
+        photoRef: (row.photoRef as string | undefined) ?? null,
+        recordedAt: row.recordedAt as string,
+        isDeleted,
+        updatedAt: row.updatedAt as string,
+      });
     }
   }
 
@@ -243,6 +279,9 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
   }
   if (setRows.length > 0) {
     await applyRemoteSets(db, setRows);
+  }
+  if (bodyMetricRows.length > 0) {
+    await applyRemoteBodyMetrics(db, bodyMetricRows);
   }
   await setKv(db, SYNC_TOKEN_KEY, response.nextSyncToken);
 }

@@ -17,7 +17,13 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.fitnessapp"
+      "package": "com.anonymous.fitnessapp",
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.WRITE_EXERCISE",
+        "android.permission.health.READ_WEIGHT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -25,7 +31,18 @@
     "plugins": [
       "@sentry/react-native/expo",
       "expo-font",
-      "expo-notifications"
+      "expo-notifications",
+      "react-native-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ]
   }
 }

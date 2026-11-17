@@ -18,6 +18,15 @@ import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { listByLocalDay, listLoggedLocalDays, softDelete, type LocalFoodLogRow } from "../lib/food-log-repo";
+import {
+  getHcStatus,
+  importHcWeights,
+  loadHcSettings,
+  readRecentExerciseSessions,
+  readTodaySteps,
+  WEIGHT_IMPORT_LOOKBACK_DAYS,
+  type HcExerciseSessionSummary,
+} from "../lib/health-connect";
 import { CACHED_GOAL_KEY, getKv, setKv } from "../lib/kv-store";
 import type { SqlDb } from "../lib/sql-db";
 import { syncNow } from "../lib/sync-engine";
@@ -53,6 +62,8 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [activeWorkoutSets, setActiveWorkoutSets] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [streak, setStreak] = useState<ReturnType<typeof computeLoggingStreak> | null>(null);
+  const [hcSteps, setHcSteps] = useState<number | null>(null);
+  const [hcExercise, setHcExercise] = useState<HcExerciseSessionSummary | null>(null);
 
   const loadEntries = useCallback(async (db: SqlDb) => {
     setEntries(await listByLocalDay(db, accountId, todayDate()));
@@ -81,6 +92,25 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
 
     const activeSession = await getActiveSession(db, accountId);
     setActiveWorkoutSets(activeSession ? (await listSetsForSession(db, activeSession.id)).length : null);
+
+    // Health Connect: only reads what's opted into (HealthConnectScreen), and only on an Android
+    // device where it's actually available - getHcStatus/the read functions themselves already
+    // no-op safely everywhere else, but checking status first avoids three pointless native calls.
+    const hcStatus = await getHcStatus();
+    if (hcStatus === "available") {
+      const hcSettings = await loadHcSettings(db);
+      if (hcSettings.steps) {
+        setHcSteps(await readTodaySteps());
+      }
+      if (hcSettings.exercise) {
+        const sessions = await readRecentExerciseSessions(1);
+        setHcExercise(sessions[0] ?? null);
+      }
+      if (hcSettings.weight) {
+        const since = new Date(Date.now() - WEIGHT_IMPORT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        void importHcWeights(db, API_URL, session.accessToken, accountId, since);
+      }
+    }
 
     try {
       const { goal: activeGoal } = await getProfile(API_URL, session.accessToken);
@@ -182,6 +212,20 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
                 <MacroBar label="Carbs" grams={sumMacro(entries, "carbG")} targetGrams={Number(goal.target_carb_g)} color={colors.carb} />
                 <MacroBar label="Fat" grams={sumMacro(entries, "fatG")} targetGrams={Number(goal.target_fat_g)} color={colors.fat} />
               </View>
+            </Card>
+          ) : null}
+
+          {hcSteps !== null || hcExercise !== null ? (
+            <Card style={{ marginTop: space.lg }}>
+              <SectionHeader title="Today's activity" />
+              {hcSteps !== null ? (
+                <AppText variant="bodyMedium" numbers>{hcSteps.toLocaleString()} steps</AppText>
+              ) : null}
+              {hcExercise ? (
+                <AppText variant="caption" color={colors.textSecondary} style={{ marginTop: space.xxs }}>
+                  {hcExercise.title ?? "Workout"} logged in Health Connect
+                </AppText>
+              ) : null}
             </Card>
           ) : null}
 

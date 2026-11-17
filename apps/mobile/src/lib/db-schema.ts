@@ -1,6 +1,6 @@
 import type { SqlDb } from "./sql-db";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * Local SQLite mirror for offline sync (ARCHITECTURE.md section 3). `food_log` mirrors app.food_log
@@ -12,6 +12,8 @@ const SCHEMA_VERSION = 3;
  * recipe building/logging. `workout_session`/`workout_set` mirror app.workout_session/
  * app.workout_set the same way, for offline workout logging; `workout_set.exercise_name` is a
  * local-only display snapshot (like food_log's macro columns) - the synced row has no such column.
+ * `body_metric` mirrors app.body_metric the same way again, for offline-capable Health Connect
+ * weight imports (and any future manual measurement entry) - see lib/health-connect.ts.
  *
  * Deliberately has no expo-sqlite import, unlike db.ts, so tests can run this against a `node:sqlite`
  * -backed SqlDb without trying to load the native module outside React Native.
@@ -115,6 +117,25 @@ export async function migrate(db: SqlDb): Promise<void> {
     `);
     await db.execAsync(
       "CREATE INDEX IF NOT EXISTS workout_set_session_idx ON workout_set (session_id)",
+    );
+  }
+
+  if (currentVersion < 4) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS body_metric (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        metric_type TEXT NOT NULL,
+        value REAL,
+        photo_ref TEXT,
+        recorded_at TEXT NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        is_dirty INTEGER NOT NULL DEFAULT 1
+      )
+    `);
+    await db.execAsync(
+      "CREATE INDEX IF NOT EXISTS body_metric_account_type_idx ON body_metric (account_id, metric_type, recorded_at)",
     );
   }
 

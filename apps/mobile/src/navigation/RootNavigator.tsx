@@ -10,6 +10,7 @@ import { ExerciseDetailScreen } from "../screens/ExerciseDetailScreen";
 import { ExerciseLibraryScreen } from "../screens/ExerciseLibraryScreen";
 import { FoodSearchScreen } from "../screens/FoodSearchScreen";
 import { GuestLoadingScreen } from "../screens/GuestLoadingScreen";
+import { HealthConnectScreen } from "../screens/HealthConnectScreen";
 import { IngredientQuantityScreen } from "../screens/IngredientQuantityScreen";
 import { LogFoodScreen } from "../screens/LogFoodScreen";
 import { LogMealFromTextScreen } from "../screens/LogMealFromTextScreen";
@@ -53,6 +54,7 @@ export type RootStackParamList = {
   LogPackagedFood: { accountId: string; barcode: string };
   CoachChat: { accountId: string };
   Reminders: { accountId: string };
+  HealthConnect: { accountId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -131,6 +133,7 @@ export function RootNavigator() {
         />
         <Stack.Screen name="CoachChat" component={CoachChatScreen} options={{ title: "Coach" }} />
         <Stack.Screen name="Reminders" component={RemindersScreen} options={{ title: "Reminders" }} />
+        <Stack.Screen name="HealthConnect" component={HealthConnectScreen} options={{ title: "Health Connect" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

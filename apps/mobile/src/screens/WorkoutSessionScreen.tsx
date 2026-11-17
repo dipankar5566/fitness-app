@@ -16,6 +16,7 @@ import { type Program, type ProgramDay } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
+import { loadHcSettings, writeWorkoutToHc } from "../lib/health-connect";
 import { FOLLOWED_PROGRAM_KEY, getKv } from "../lib/kv-store";
 import { syncNow } from "../lib/sync-engine";
 import {
@@ -150,6 +151,15 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
     const now = new Date().toISOString();
     await endSession(db, session.id, now, now);
     trackEvent("workout_ended");
+
+    // Opt-in Health Connect write (HealthConnectScreen) - a best-effort side effect, not awaited
+    // alongside the local end/sync above, since a Health Connect failure shouldn't block or delay
+    // ending the workout in this app's own data.
+    const hcSettings = await loadHcSettings(db);
+    if (hcSettings.writeWorkout) {
+      void writeWorkoutToHc({ startedAt: session.startedAt, endedAt: now });
+    }
+
     await refresh();
     void syncNow(db, API_URL, guestSession.accessToken);
   };

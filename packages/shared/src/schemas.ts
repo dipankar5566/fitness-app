@@ -80,6 +80,22 @@ export const customFoodIngredientSchema = syncableBaseSchema.extend({
 });
 export type CustomFoodIngredient = z.infer<typeof customFoodIngredientSchema>;
 
+// Body metrics (weight/measurements/photo, PRD §5.6) — app.body_metric's existing CHECK constraint
+// (0002_app_schema.sql). `value` is optional since a 'photo' row has no numeric value, and
+// `photoRef` likewise since a weight/measurement row has no photo - exactly one is populated in
+// practice, mirroring the nullable columns rather than a stricter discriminated union, since the
+// server doesn't enforce that pairing either.
+export const bodyMetricTypeSchema = z.enum(["weight_kg", "waist_cm", "chest_cm", "arm_cm", "photo"]);
+export type BodyMetricType = z.infer<typeof bodyMetricTypeSchema>;
+
+export const bodyMetricSchema = syncableBaseSchema.extend({
+  metricType: bodyMetricTypeSchema,
+  value: z.number().optional(),
+  photoRef: z.string().optional(),
+  recordedAt: z.string().datetime(),
+});
+export type BodyMetric = z.infer<typeof bodyMetricSchema>;
+
 // Generic sync envelope — one push/pull protocol for every syncable table (ARCHITECTURE.md §3).
 export const syncTableNameSchema = z.enum([
   "food_log",

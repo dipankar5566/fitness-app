@@ -124,15 +124,42 @@ describe("SyncService", () => {
     });
 
     it("rejects an unregistered table as invalid", async () => {
-      // body_metric is in syncTableNameSchema but has no adapter yet (no screens exist for it) -
-      // workout_session/workout_set are registered now, so this uses the one still unregistered.
+      // Every current SyncTableName now has an adapter (body_metric included) - the controller's
+      // own syncPushRequestSchema.parse already rejects any table name outside that enum before
+      // this ever runs, so this exercises the registry's defensive `!adapter` branch directly
+      // (a future table added to the enum without an adapter yet, same situation body_metric was
+      // in until this pass) rather than a case reachable through the real HTTP endpoint today.
       const result = await service.push("account-1", {
         syncToken: null,
-        rows: [{ table: "body_metric", op: "upsert", row: { id: "bm-1" } }],
+        rows: [{ table: "not_a_real_table" as never, op: "upsert", row: { id: "bm-1" } }],
       });
 
       expect(result).toEqual({ applied: [], rejected: [{ id: "bm-1", reason: "invalid" }] });
       expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it("upserts a body_metric row through the registry, account_id from the JWT", async () => {
+      client.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const row = {
+        id: "77777777-7777-7777-7777-777777777777",
+        accountId: "99999999-9999-9999-9999-999999999999", // must be ignored - account comes from the JWT
+        isDeleted: false,
+        updatedAt: "2026-11-17T06:00:00.000Z",
+        metricType: "weight_kg",
+        value: 72.5,
+        recordedAt: "2026-11-17T06:00:00.000Z",
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "body_metric", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [row.id], rejected: [] });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO app.body_metric"),
+        expect.arrayContaining(["account-1", "weight_kg", 72.5]),
+      );
     });
 
     it("upserts a workout_session row through the registry, account_id from the JWT", async () => {
@@ -255,6 +282,28 @@ describe("SyncService", () => {
         [row.id],
       );
     });
+
+    it("rejects a stale body_metric push the same way as every other table", async () => {
+      client.query
+        .mockResolvedValueOnce({ rowCount: 0 }) // the upsert's WHERE guard didn't match
+        .mockResolvedValueOnce({ rows: [{ account_id: "account-1" }] }); // conflictReason lookup
+
+      const row = {
+        id: "77777777-7777-7777-7777-777777777777",
+        accountId: "99999999-9999-9999-9999-999999999999",
+        isDeleted: false,
+        updatedAt: "2026-11-17T06:00:00.000Z",
+        metricType: "weight_kg",
+        value: 72.5,
+        recordedAt: "2026-11-17T06:00:00.000Z",
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "body_metric", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [], rejected: [{ id: row.id, reason: "stale" }] });
+    });
   });
 
   describe("pull", () => {
@@ -351,6 +400,41 @@ describe("SyncService", () => {
       const result = await service.pull("account-1", since);
 
       expect(result).toEqual({ changes: [], nextSyncToken: since });
+    });
+
+    it("pulls a body_metric row (e.g. a Health Connect weight import) through the registry", async () => {
+      const serverUpdatedAt = new Date("2026-11-17T06:05:00.000Z");
+      db.query
+        .mockResolvedValueOnce({ rows: [] }) // food_log
+        .mockResolvedValueOnce({ rows: [] }) // custom_food
+        .mockResolvedValueOnce({ rows: [] }) // custom_food_ingredient
+        .mockResolvedValueOnce({ rows: [] }) // workout_session
+        .mockResolvedValueOnce({ rows: [] }) // workout_set
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "77777777-7777-7777-7777-777777777777",
+              account_id: "account-1",
+              metric_type: "weight_kg",
+              value: "72.5",
+              photo_ref: null,
+              recorded_at: new Date("2026-11-17T06:00:00.000Z"),
+              is_deleted: false,
+              updated_at: new Date("2026-11-17T06:00:00.000Z"),
+              server_updated_at: serverUpdatedAt,
+            },
+          ],
+        });
+
+      const result = await service.pull("account-1", null);
+
+      expect(result.nextSyncToken).toBe(serverUpdatedAt.toISOString());
+      expect(result.changes).toHaveLength(1);
+      expect(result.changes[0]).toMatchObject({
+        table: "body_metric",
+        op: "upsert",
+        row: { metricType: "weight_kg", value: 72.5 },
+      });
     });
   });
 });

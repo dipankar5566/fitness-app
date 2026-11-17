@@ -338,7 +338,55 @@ case in `food-log-repo.test.ts`. The exit criterion's actual on-device firing/st
 check needs the native Android build (CLAUDE.md's hoisted-layout workaround) and wasn't run as
 part of this pass - flagged as outstanding, not claimed as done.
 
-Still to do for M5: Health Connect read (steps/exercise/weight) + opt-in write.
+Health Connect read + opt-in write is done - **all of M5 is now done.** `body_metric` became the
+sixth syncable table (the registry's own docstring in `sync.service.ts` anticipated exactly this):
+`packages/shared/src/schemas.ts` gained `bodyMetricSchema` (mirroring `app.body_metric`'s existing
+columns/CHECK constraint from M1's `0002_app_schema.sql`/`0003_sync_cursor.sql` - no migration was
+needed), `sync.service.ts` got a `bodyMetricAdapter` modeled on `workoutSessionAdapter`, and
+`apps/mobile` got a `body_metric` table (`db-schema.ts` v4) plus `body-metric-repo.ts` following
+`workout-repo.ts`'s outbox pattern - with one deliberate difference: `insert` uses `INSERT OR
+IGNORE`, not a plain `INSERT`, since Health Connect re-import calls it repeatedly with the same
+deterministic id for an already-imported reading and must stay idempotent, not throw on the
+primary-key conflict. `sync-engine.ts` pushes/pulls it in the same round trip as the other five.
+Verified against the real API/`indb` database: push/pull round-trip, stale-reject, and soft-delete
+all curled directly against the running dev server (confirmed via `tsc-watch` picking up the
+change live), plus new `sync.service.test.ts`/`body-metric-repo.test.ts`/`sync-engine.test.ts`
+cases.
+
+`apps/mobile/src/lib/health-connect.ts` (`react-native-health-connect` - v4+ bundles the Expo
+integration directly, so no separate `expo-health-connect` package exists anymore, unlike what
+ARCHITECTURE.md §7 originally sketched; `expo-build-properties` sets `minSdkVersion: 26` as
+Health Connect requires) is a thin Android-only wrapper - every exported function safely no-ops
+off Android, so screens never need their own `Platform` guard - plus a pure mapping layer kept
+separate from the native calls specifically so it's unit-testable without them: `extractWeightReading`/
+`toBodyMetricWeightRow` (HC weight record -> body_metric row) and `mapSessionToHcExercisePayload`
+(a local workout session -> HC's `ExerciseSessionRecord`, always written as strength training -
+the workout logger has no exercise-type taxonomy yet and every built-in-program exercise is
+resistance work). Weight readings are **imported into `body_metric` and synced**, not just
+displayed, so the coach's existing `getLatestWeightKg` grounding and a future M6 weight-trend
+screen pick them up automatically; re-importing is idempotent via `stableIdForHcWeight` (sha1 of
+`hc-weight:<HC record id>`, the same deterministic-hash approach `db/seed-programs.ts` uses, done
+with `expo-crypto` since `node:crypto` isn't available on-device). Steps/exercise-session reads
+are shown live on `HomeScreen`'s new "Today's activity" card and never persisted locally - nothing
+yet needs their history, only "today". Permission is opt-in **per data type** (`HcSettings` in
+`kv`, `HC_SETTINGS_KEY`) from the new `HealthConnectScreen` (a Me-tab row): turning a toggle on
+requests only that type's permission and leaves it off on denial; `WorkoutSessionScreen`'s "End
+workout" writes to Health Connect only when the write toggle is on. `consent_record` writes are
+deliberately deferred to M6's DPDP pass (`ROADMAP.md` M6) - this feature's opt-in toggles are a
+real gate on the behavior, just not yet logged to that audit table.
+
+Three `react-native`/Expo native modules (`react-native`, `react-native-health-connect`,
+`expo-crypto`) can't be imported outside a React Native/Expo runtime - confirmed directly
+(`react-native`'s own entry point uses Flow syntax Vite's transform can't parse; the other two
+transitively import `expo`'s own module registry). `health-connect.test.ts` mocks all three via
+`vi.mock`/`vi.hoisted`, the same pattern `reminders.test.ts` already established for
+`expo-notifications` - 23 tests cover the pure mappers directly and the thin wrapper's control
+flow through the mocks (permission gating, the Android-only no-op, summing steps, sorting
+sessions, import/skip/sync behavior). **Not verified**: there's no Android device or emulator in
+this environment (confirmed - no `adb`), so the ROADMAP M5 exit criterion ("Health Connect read
+works on a real device") and an actual native rebuild (`expo prebuild` + `expo run:android`, which
+would also need CLAUDE.md's hoisted-layout/long-path workarounds) remain outstanding, not claimed
+as done.
 
 **`apps/mobile` UI/UX redesign (cross-cutting, not a roadmap milestone).** The app was functional
 but every screen was an unstyled stack of default RN `<Button>`s with no theme or navigation

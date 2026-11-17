@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import {
+  bodyMetricSchema,
   customFoodIngredientSchema,
   customFoodSchema,
   foodLogEntrySchema,
@@ -212,8 +213,40 @@ const workoutSetAdapter: TableAdapter = {
   }),
 };
 
-/** One adapter per syncable table actually wired up so far - body_metric joins the same way once
- * its screens exist (M3/M6): add an adapter, add it here, done. push()/pull() never special-case a
+const bodyMetricAdapter: TableAdapter = {
+  upsertSchema: bodyMetricSchema,
+  deleteSchema: deleteRowSchema,
+  conflictTable: "app.body_metric",
+  upsertSql: `INSERT INTO app.body_metric (id, account_id, metric_type, value, photo_ref, recorded_at, is_deleted, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (id) DO UPDATE SET
+       metric_type = EXCLUDED.metric_type, value = EXCLUDED.value, photo_ref = EXCLUDED.photo_ref,
+       recorded_at = EXCLUDED.recorded_at, is_deleted = EXCLUDED.is_deleted, updated_at = EXCLUDED.updated_at,
+       server_updated_at = now()
+     WHERE app.body_metric.account_id = $2 AND app.body_metric.updated_at <= EXCLUDED.updated_at`,
+  upsertParams: (accountId, row) => [
+    row.id, accountId, row.metricType, row.value ?? null, row.photoRef ?? null, row.recordedAt, row.isDeleted, row.updatedAt,
+  ],
+  deleteSql: `UPDATE app.body_metric SET is_deleted = true, updated_at = $3, server_updated_at = now()
+     WHERE id = $1 AND account_id = $2 AND updated_at <= $3`,
+  deleteParams: (accountId, row) => [row.id, accountId, row.updatedAt],
+  selectSql: (hasSince) =>
+    hasSince
+      ? "SELECT * FROM app.body_metric WHERE account_id = $1 AND server_updated_at > $2 ORDER BY server_updated_at"
+      : "SELECT * FROM app.body_metric WHERE account_id = $1 ORDER BY server_updated_at",
+  toChangeRow: (row) => ({
+    id: row.id,
+    accountId: row.account_id,
+    isDeleted: row.is_deleted,
+    updatedAt: (row.updated_at as Date).toISOString(),
+    metricType: row.metric_type,
+    value: row.value !== null ? Number(row.value) : undefined,
+    photoRef: row.photo_ref ?? undefined,
+    recordedAt: (row.recorded_at as Date).toISOString(),
+  }),
+};
+
+/** One adapter per syncable table actually wired up so far. push()/pull() never special-case a
  * table beyond this map (food_log's macro enrichment in pull() is the one exception, since macros
  * aren't part of the row's own stored columns). accountId is always taken from the JWT, never the
  * pushed row, so a row can never be pushed into someone else's account. */
@@ -223,6 +256,7 @@ const registry: Partial<Record<SyncTableName, TableAdapter>> = {
   custom_food_ingredient: customFoodIngredientAdapter,
   workout_session: workoutSessionAdapter,
   workout_set: workoutSetAdapter,
+  body_metric: bodyMetricAdapter,
 };
 
 @Injectable()

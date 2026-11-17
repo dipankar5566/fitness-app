@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getDirty as getDirtyBodyMetrics, getLatest, insert as insertBodyMetric, type LocalBodyMetric } from "./body-metric-repo";
 import { getDirtyCustomFoods, insertCustomFood, listCustomFoods, type LocalCustomFood } from "./custom-food-repo";
 import { getDirty, insert, listByLocalDay, type LocalFoodLogRow } from "./food-log-repo";
 import { getKv } from "./kv-store";
@@ -228,6 +229,53 @@ describe("sync-engine", () => {
     expect(await getDirtySets(db)).toEqual([]);
     expect(await getActiveSession(db, "account-1")).toBeNull(); // the pulled "ended" change was applied
     expect((await listSetsForSession(db, session.id))[0].exerciseName).toBe("Bench Press"); // untouched
+  });
+
+  it("pushes a dirty body_metric row and applies a pulled one", async () => {
+    const { pushSync, pullSync } = await import("./api");
+    const metric: LocalBodyMetric = {
+      id: "77777777-7777-7777-7777-777777777777",
+      accountId: "account-1",
+      metricType: "weight_kg",
+      value: 72.5,
+      photoRef: null,
+      recordedAt: "2026-11-17T06:00:00.000Z",
+      isDeleted: false,
+      updatedAt: "2026-11-17T06:00:00.000Z",
+    };
+    (pushSync as ReturnType<typeof vi.fn>).mockResolvedValue({ applied: [metric.id], rejected: [] });
+    (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      changes: [
+        {
+          table: "body_metric",
+          op: "upsert",
+          row: {
+            id: "88888888-8888-8888-8888-888888888888",
+            accountId: "account-1",
+            isDeleted: false,
+            updatedAt: "2026-11-17T07:00:00.000Z",
+            metricType: "weight_kg",
+            value: 73,
+            recordedAt: "2026-11-17T07:00:00.000Z",
+          },
+        },
+      ],
+      nextSyncToken: "2026-11-17T07:00:00.000Z",
+    });
+    await insertBodyMetric(db, metric);
+
+    const { syncNow } = await import("./sync-engine");
+    await syncNow(db, "http://localhost:3001", "token-1");
+
+    expect(pushSync).toHaveBeenCalledWith(
+      "http://localhost:3001",
+      "token-1",
+      expect.objectContaining({
+        rows: expect.arrayContaining([expect.objectContaining({ table: "body_metric", row: expect.objectContaining({ id: metric.id }) })]),
+      }),
+    );
+    expect(await getDirtyBodyMetrics(db)).toEqual([]);
+    expect((await getLatest(db, "account-1", "weight_kg"))?.value).toBe(73); // the pulled row was applied
   });
 
   it("collapses overlapping calls into a single run", async () => {

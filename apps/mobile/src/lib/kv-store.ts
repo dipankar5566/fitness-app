@@ -16,6 +16,11 @@ export const CACHED_GOAL_KEY = "cached_goal";
 // TabScreens.tsx's MeTabScreen reads it to show each reminder's current enabled/time state.
 export const REMINDER_SETTINGS_KEY = "reminder_settings";
 
+// HealthConnectScreen writes this (per-data-type opt-in: steps/exercise/weight reads, workout
+// write); HomeScreen reads it to decide whether to show the "Today's activity" card, and
+// WorkoutSessionScreen reads it to decide whether to write an ended session to Health Connect.
+export const HC_SETTINGS_KEY = "health_connect_settings";
+
 export async function getKv(db: SqlDb, key: string): Promise<string | null> {
   const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key]);
   return row?.value ?? null;
