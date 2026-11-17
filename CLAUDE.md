@@ -316,6 +316,44 @@ file. Do not collapse these two files back into one; do not add `.js` extensions
 remove them from `index.types.ts`. `turbo.json`'s `typecheck` task depends on `^build` so
 `packages/shared`'s declarations rebuild automatically before any dependent package typechecks.
 
+**Known issue, resolved: `apps/mobile`'s native Android build needs pnpm's `nodeLinker: hoisted`
+on Windows.** pnpm's default `isolated` layout nests every package under a hashed
+`node_modules/.pnpm/<pkg>@<version>_<hash>/` folder; on Windows this blows past the 260-character
+path limit for any native module's own CMake/ninja build (hit this with `react-native-screens`,
+`@sentry/react-native`, `expo-modules-core`, and codegen'd `react-native-safe-area-context`) -
+confirmed via a measured 287-character failing path, and confirmed that enabling the
+`LongPathsEnabled` registry key alone does **not** fix it (the bundled `ninja`/CMake toolchain still
+hits its own hard-coded length check or a raw OS `mkdir`/`ENOENT` failure). The fix in place:
+`pnpm-workspace.yaml` sets `nodeLinker: hoisted` (flat `node_modules`, no hashed segments) - this is
+what pnpm v12 actually reads for this setting, **not** a root `.npmrc`'s `node-linker=hoisted`
+(confirmed via `pnpm config get node-linker` returning `undefined` with only the `.npmrc` in place).
+`apps/mobile/android/app/build.gradle` also sets `externalNativeBuild.cmake.buildStagingDirectory`
+to `C:/rnb` as defense-in-depth - that file lives in the gitignored, `expo prebuild`-generated
+`android/` directory, so this would need re-adding if that directory is ever wiped and regenerated
+from scratch (likely no longer strictly required now that hoisted layout removes the long hashed
+paths, but harmless to keep).
+
+**Known trap (current, unresolved): hoisted layout breaks `apps/api`'s and `apps/mobile`'s own
+`node_modules/.bin` shims on Windows.** With `nodeLinker: hoisted`, shared deps like `expo` and
+`tsc-watch` get hoisted all the way to the repo-root `node_modules/`, but each workspace package's
+own `.bin/<tool>` shim still hard-codes a relative path assuming the tool lives in *that package's*
+`node_modules` - it doesn't, so the shim fails with `Cannot find module`. Symptom: plain `pnpm dev`
+(`apps/api`) or `pnpm android`/`pnpm start` (`apps/mobile`) fail this way even though the tool is
+correctly installed. Workaround until this is fixed properly: invoke the tool directly against its
+hoisted root location instead of through the package.json script, e.g. from `apps/api`:
+`node <repo-root>/node_modules/tsc-watch/dist/lib/tsc-watch.js -p tsconfig.build.json --onSuccess
+"node dist/main.js"`; from `apps/mobile`: `node <repo-root>/node_modules/expo/bin/cli run:android`
+(or `start`). Check that tool's `package.json`'s `"bin"` field at the repo root if a different one
+breaks the same way.
+
+**Windows local dev setup, one-time machine prerequisites** (not part of the repo, but required to
+build `apps/mobile`'s native Android project on Windows): Windows long-path support enabled
+(`HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1`, needs an elevated
+PowerShell) and a Windows Defender exclusion for the repo root to stop real-time scanning from
+locking files mid-move during `pnpm install`/native builds (`pnpm install --force` after a
+`nodeLinker` change otherwise fails intermittently with `Access is denied` on a different file each
+retry - clearing the one locked file and retrying works too, just slower).
+
 ## Repo map
 
 ```

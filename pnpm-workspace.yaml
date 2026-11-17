@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
   - "db"
+nodeLinker: hoisted
 allowBuilds:
   '@nestjs/core': true
   '@sentry/cli': true
