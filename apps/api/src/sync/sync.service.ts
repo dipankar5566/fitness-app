@@ -81,6 +81,10 @@ const foodLogAdapter: TableAdapter = {
     source: row.source,
     isEstimate: row.is_estimate,
     macros: row.macros,
+    // Local-display-only, like macros - resolved fresh by enrichWithMacros on every pull (never a
+    // stored column on app.food_log itself). This is what backfills a pre-existing row on the
+    // client that was logged before food_log.food_name existed there.
+    foodName: row.food_name ?? undefined,
   }),
 };
 

@@ -106,6 +106,7 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
         isDeleted: false,
         updatedAt: now,
         macros: preview,
+        foodName: product.brand ? `${product.name} (${product.brand})` : product.name,
       });
       trackEvent("packaged_food_logged");
       void syncNow(db, API_URL, session.accessToken);

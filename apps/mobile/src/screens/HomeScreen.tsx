@@ -270,6 +270,9 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
               >
                 <View style={{ flex: 1 }}>
                   <AppText variant="bodyMedium" numberOfLines={1}>
+                    {entry.foodName ?? "Unknown food"}
+                  </AppText>
+                  <AppText variant="caption" color={colors.textSecondary} numbers>
                     {entry.quantity} {entry.unit}
                   </AppText>
                   {entry.isEstimate ? <AppText variant="micro" color={colors.warning}>estimate</AppText> : null}

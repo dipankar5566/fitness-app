@@ -476,6 +476,53 @@ hoisted root location instead of through the package.json script, e.g. from `app
 (or `start`). Check that tool's `package.json`'s `"bin"` field at the repo root if a different one
 breaks the same way.
 
+**Known issue, resolved: the Today diary showed only the portion ("2 idli"), never the food's
+name.** Root cause: `food_log` (both `app.food_log` and its local SQLite mirror) never stored a
+display name - only `food_source`/`food_ref`, which `HomeScreen`'s entry row rendered as nothing
+but `{quantity} {unit}`. Fixed with a local-only `food_log.food_name` snapshot (same idea as
+`workout_set.exercise_name`): filled at log time from whatever screen already has the resolved
+name in hand (`LogFoodScreen`'s `detail.name`, `LogMealFromTextScreen`'s `item.foodName`,
+`LogPackagedFoodScreen`'s `product.name`/`brand`, `MyFoodsScreen`'s `customFood.name`), and
+resolved server-side on every `/sync` pull / `/food-log` response (`enrichWithMacros` now attaches
+`food_name` for all three sources - indb via `FoodService.getNutrientSummaries`'s existing query,
+packaged via `PackagedFoodService.getNutrientSummaries`'s existing query, custom via one new
+batched `app.custom_food` lookup) so pre-existing entries logged before this fix get backfilled,
+not just newly-logged ones. `applyRemote` COALESCEs the incoming name rather than overwriting, so
+a null-name pull (shouldn't happen, but a documented safety net) can never wipe a good local name.
+**A second, independent bug surfaced while fixing this, found only by inspecting a real device's
+on-disk SQLite file**: the migration that adds `food_name` (`db-schema.ts` v5) left a real test
+device stuck with `PRAGMA user_version = 5` (claiming the migration ran) while the column was
+genuinely still missing - almost certainly an app/process teardown mid-`migrate()` call (observed
+during a dev Fast Refresh cycle) committing the version-bump statement without the preceding
+`ALTER TABLE` surviving. `migrate()` now self-heals this unconditionally on every call (checking
+`PRAGMA table_info(food_log)` directly, independent of trusting `user_version`), not just on the
+normal v4→v5 forward path - see `db-schema.test.ts`'s dedicated "stuck at v5" regression test,
+which hand-builds that exact corrupted state. Lesson for any future `ALTER TABLE`-based migration
+here: don't trust the version counter alone as proof a schema change actually landed on disk.
+Verified end-to-end on a real Android emulator (not just unit tests) after rebuilding the native
+app for the M5 Health Connect changes: pre-existing breakfast entries correctly backfilled real
+names after the forced re-pull, and a freshly-logged "Plain dosa" showed its name immediately via
+the normal write path.
+
+**Known issue, resolved: rebuilding `apps/mobile`'s native Android project after adding
+`expo-build-properties` broke on this machine's existing SDK/AVD setup, two separate ways.** (1)
+`compileSdkVersion: 36` (the version `react-native-health-connect`'s own README example uses)
+is too low for this project's other Expo SDK 58 modules, which need `compileSdk 37+` - confirmed
+via a real `:app:checkDebugAarMetadata` failure listing 13 modules each demanding it. Fixed by
+setting `compileSdkVersion: 37` instead (matching what this project's modules actually need, not
+blindly copying a single library's own minimal example). (2) The Windows long-path workaround
+(`externalNativeBuild.cmake.buildStagingDirectory` in `apps/mobile/android/app/build.gradle`,
+documented above) needs re-adding every time `expo prebuild` regenerates the gitignored `android/`
+directory, same as already noted - but two more things about it had to be rediscovered by actually
+hitting the build errors: it must be assigned with `=` as a `File` (`buildStagingDirectory =
+file("C:/rnb")`), not called as a method with a string, and it belongs on the **top-level**
+`android.externalNativeBuild.cmake` block, not inside `defaultConfig.externalNativeBuild.cmake`
+(that nested block's `ExternalNativeCmakeOptions` class doesn't expose this property at all - AGP
+rejects it with "unknown property" from there). An Android SDK at `C:\Android\Sdk` and an AVD
+named `fitness_app_avd` already existed on this machine from earlier verification passes (M3/M4's
+UI redesign); `ANDROID_HOME` isn't set globally, so it must be set per-session before any
+`emulator`/`adb`/gradle invocation.
+
 **Windows local dev setup, one-time machine prerequisites** (not part of the repo, but required to
 build `apps/mobile`'s native Android project on Windows): Windows long-path support enabled
 (`HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1`, needs an elevated

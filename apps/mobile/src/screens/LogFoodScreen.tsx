@@ -131,6 +131,7 @@ export function LogFoodScreen({ navigation, route }: Props) {
         isDeleted: false,
         updatedAt: now,
         macros: preview,
+        foodName: detail.name,
       });
       trackEvent("food_logged");
       void syncNow(db, API_URL, session.accessToken);

@@ -1,6 +1,6 @@
 import type { SqlDb } from "./sql-db";
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /**
  * Local SQLite mirror for offline sync (ARCHITECTURE.md section 3). `food_log` mirrors app.food_log
@@ -14,6 +14,9 @@ const SCHEMA_VERSION = 4;
  * local-only display snapshot (like food_log's macro columns) - the synced row has no such column.
  * `body_metric` mirrors app.body_metric the same way again, for offline-capable Health Connect
  * weight imports (and any future manual measurement entry) - see lib/health-connect.ts.
+ * `food_log.food_name` is a local-only display snapshot too (same idea as `workout_set.
+ * exercise_name`) - filled at log time and backfilled on pull, since the synced row itself has no
+ * such column (the server always re-resolves the name from food_source/food_ref).
  *
  * Deliberately has no expo-sqlite import, unlike db.ts, so tests can run this against a `node:sqlite`
  * -backed SqlDb without trying to load the native module outside React Native.
@@ -21,6 +24,22 @@ const SCHEMA_VERSION = 4;
 export async function migrate(db: SqlDb): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const currentVersion = row?.user_version ?? 0;
+
+  // Self-healing guard, independent of the version counter below - observed in practice on a
+  // real device: an app/process teardown mid-migration (e.g. during a dev Fast Refresh cycle)
+  // can let the version-bump statement commit while an earlier ALTER in the same migrate() call
+  // doesn't survive, leaving user_version claiming v5 is applied while food_name is still
+  // missing. Checked unconditionally on every call - PRAGMA table_info is cheap - so a device
+  // already stuck in that state gets healed instead of permanently skipping the ALTER (the
+  // normal forward-migration path below handles a device that hasn't reached v5 at all yet).
+  if (currentVersion >= 5) {
+    const columns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(food_log)");
+    if (!columns.some((column) => column.name === "food_name")) {
+      await db.execAsync("ALTER TABLE food_log ADD COLUMN food_name TEXT");
+      await db.execAsync("DELETE FROM kv WHERE key = 'sync_token'");
+    }
+  }
+
   if (currentVersion >= SCHEMA_VERSION) {
     return;
   }
@@ -137,6 +156,16 @@ export async function migrate(db: SqlDb): Promise<void> {
     await db.execAsync(
       "CREATE INDEX IF NOT EXISTS body_metric_account_type_idx ON body_metric (account_id, metric_type, recorded_at)",
     );
+  }
+
+  if (currentVersion < 5) {
+    // food_name is a local-only display snapshot (like workout_set.exercise_name) - the synced
+    // row has no such column, the server resolves it fresh from food_source/food_ref every time.
+    await db.execAsync("ALTER TABLE food_log ADD COLUMN food_name TEXT");
+    // Every food_log row that already existed on this device was written before this column
+    // existed, so it's NULL - clearing the sync token forces one full re-pull, and
+    // applyRemote's COALESCE backfills food_name onto those rows without disturbing anything else.
+    await db.execAsync("DELETE FROM kv WHERE key = 'sync_token'");
   }
 
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);

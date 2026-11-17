@@ -37,6 +37,7 @@ const ROW: LocalFoodLogRow = {
   isDeleted: false,
   updatedAt: "2026-11-14T12:00:00.000Z",
   macros: { kcal: 195, proteinG: 4, fatG: 0.5, carbG: 42 },
+  foodName: "Idli",
 };
 
 describe("sync-engine", () => {
@@ -69,6 +70,7 @@ describe("sync-engine", () => {
             source: "manual",
             isEstimate: false,
             macros: null,
+            foodName: "Dal",
           },
         },
       ],
@@ -82,7 +84,8 @@ describe("sync-engine", () => {
     expect(await getDirty(db)).toEqual([]); // the pushed row was marked clean
     const entries = await listByLocalDay(db, "account-1", "2026-11-14");
     expect(entries.map((e) => e.id)).toContain(ROW.id);
-    expect(entries.some((e) => e.foodRef === "L003")).toBe(true); // the pulled row was applied
+    const pulled = entries.find((e) => e.foodRef === "L003");
+    expect(pulled?.foodName).toBe("Dal"); // the pulled row's name was applied
     expect(await getKv(db, "sync_token")).toBe("2026-11-14T13:00:00.000Z");
   });
 

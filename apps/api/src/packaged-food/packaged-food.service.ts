@@ -17,10 +17,13 @@ export interface PackagedFoodDetail {
   nutrientsPer100g: PackagedFoodNutrients;
 }
 
-/** Same MacroBreakdown shape FoodLogService exports - duplicated rather than imported, since
- * food-log.service.ts needs to import PackagedFoodService (to enrich packaged-food log rows),
- * and importing back from there would create a cycle for a 4-field interface. */
+/** Same MacroBreakdown shape FoodLogService exports, plus name/brand for enrichWithMacros's
+ * food_name snapshot - duplicated rather than imported, since food-log.service.ts needs to
+ * import PackagedFoodService (to enrich packaged-food log rows), and importing back from there
+ * would create a cycle. */
 export interface PackagedFoodMacroBreakdown {
+  name: string;
+  brand: string | null;
   kcal: number | null;
   proteinG: number | null;
   fatG: number | null;
@@ -90,14 +93,16 @@ export class PackagedFoodService {
     if (ids.length === 0) {
       return new Map();
     }
-    const result = await this.db.query<Pick<PackagedFoodRow, "id" | "nutrients">>(
-      "SELECT id, nutrients FROM app.packaged_food WHERE id = ANY($1)",
+    const result = await this.db.query<Pick<PackagedFoodRow, "id" | "name" | "brand" | "nutrients">>(
+      "SELECT id, name, brand, nutrients FROM app.packaged_food WHERE id = ANY($1)",
       [ids],
     );
     return new Map(
       result.rows.map((row) => [
         row.id,
         {
+          name: row.name,
+          brand: row.brand,
           kcal: row.nutrients.energy_kcal,
           proteinG: row.nutrients.protein_g,
           fatG: row.nutrients.fat_g,

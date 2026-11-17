@@ -402,6 +402,38 @@ describe("SyncService", () => {
       expect(result).toEqual({ changes: [], nextSyncToken: since });
     });
 
+    it("resolves food_name onto a pulled food_log row from FoodService's nutrient summary", async () => {
+      const serverUpdatedAt = new Date("2026-11-17T08:00:00.000Z");
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([["L002", { name: "Idli", kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }]]),
+      );
+      db.query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: validUpsertRow.id,
+              account_id: "account-1",
+              food_source: "indb",
+              food_ref: "L002",
+              quantity: "200",
+              unit: "g",
+              meal_type: "lunch",
+              logged_at: new Date("2026-11-17T06:00:00.000Z"),
+              source: "manual",
+              is_estimate: false,
+              is_deleted: false,
+              updated_at: new Date("2026-11-17T06:00:00.000Z"),
+              server_updated_at: serverUpdatedAt,
+            },
+          ],
+        })
+        .mockResolvedValue({ rows: [] }); // every other table: nothing changed
+
+      const result = await service.pull("account-1", null);
+
+      expect(result.changes[0]).toMatchObject({ table: "food_log", row: { foodName: "Idli" } });
+    });
+
     it("pulls a body_metric row (e.g. a Health Connect weight import) through the registry", async () => {
       const serverUpdatedAt = new Date("2026-11-17T06:05:00.000Z");
       db.query

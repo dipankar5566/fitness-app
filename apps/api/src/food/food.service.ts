@@ -36,6 +36,7 @@ interface ServingMeasureRow {
 }
 
 export interface FoodNutrientSummary {
+  name: string;
   kcalPer100g: number | null;
   proteinGPer100g: number | null;
   fatGPer100g: number | null;
@@ -183,8 +184,8 @@ export class FoodService {
     if (codes.length === 0) {
       return new Map();
     }
-    const foodResult = await this.db.query<{ id: number; code: string }>(
-      "SELECT id, code FROM food WHERE code = ANY($1)",
+    const foodResult = await this.db.query<{ id: number; code: string; name: string }>(
+      "SELECT id, code, name FROM food WHERE code = ANY($1)",
       [codes],
     );
     const idByCode = new Map(foodResult.rows.map((row) => [row.code, row.id]));
@@ -194,9 +195,10 @@ export class FoodService {
     }
 
     const summaryByFoodId = new Map<number, FoodNutrientSummary>(
-      ids.map((id) => [
-        id,
+      foodResult.rows.map((row) => [
+        row.id,
         {
+          name: row.name,
           kcalPer100g: null,
           proteinGPer100g: null,
           fatGPer100g: null,

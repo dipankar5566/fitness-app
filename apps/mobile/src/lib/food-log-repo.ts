@@ -21,6 +21,9 @@ export interface LocalFoodLogRow {
   isDeleted: boolean;
   updatedAt: string;
   macros: LocalMacros | null;
+  /** Local-only display snapshot (see db-schema.ts) - null for a row logged before this column
+   * existed and not yet backfilled by a pull. */
+  foodName: string | null;
 }
 
 /** A row pulled from the server via GET /sync - server is always the source of truth for macros. */
@@ -44,6 +47,7 @@ interface FoodLogSqlRow {
   fat_g: number | null;
   carb_g: number | null;
   is_dirty: number;
+  food_name: string | null;
 }
 
 function fromSqlRow(row: FoodLogSqlRow): LocalFoodLogRow {
@@ -64,6 +68,7 @@ function fromSqlRow(row: FoodLogSqlRow): LocalFoodLogRow {
     macros: hasMacros
       ? { kcal: row.kcal, proteinG: row.protein_g, fatG: row.fat_g, carbG: row.carb_g }
       : null,
+    foodName: row.food_name,
   };
 }
 
@@ -72,12 +77,13 @@ export async function insert(db: SqlDb, row: LocalFoodLogRow): Promise<void> {
   await db.runAsync(
     `INSERT INTO food_log
        (id, account_id, food_source, food_ref, quantity, unit, meal_type, logged_at, source,
-        is_estimate, is_deleted, updated_at, kcal, protein_g, fat_g, carb_g, is_dirty)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        is_estimate, is_deleted, updated_at, kcal, protein_g, fat_g, carb_g, food_name, is_dirty)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       row.id, row.accountId, row.foodSource, row.foodRef, row.quantity, row.unit, row.mealType,
       row.loggedAt, row.source, row.isEstimate ? 1 : 0, row.isDeleted ? 1 : 0, row.updatedAt,
       row.macros?.kcal ?? null, row.macros?.proteinG ?? null, row.macros?.fatG ?? null, row.macros?.carbG ?? null,
+      row.foodName,
     ],
   );
 }
@@ -129,6 +135,11 @@ export async function markClean(db: SqlDb, id: string, pushedUpdatedAt: string):
 /**
  * Applies pulled rows. A local row is overwritten only if it isn't dirty, or if the incoming row is
  * newer than the local edit - otherwise the local pending edit survives and wins the next push.
+ * food_name is COALESCEd rather than overwritten outright: the server resolves and sends a name on
+ * every pull (sync.service.ts's foodLogAdapter, resolved the same way enrichWithMacros resolves
+ * macros), which is exactly what backfills a pre-existing row logged before this column existed -
+ * but COALESCE still protects against ever nulling out a good local name on some future pull that
+ * can't resolve one (e.g. a food row deleted server-side), rather than silently losing it.
  */
 export async function applyRemote(db: SqlDb, rows: RemoteFoodLogRow[]): Promise<void> {
   await db.withTransactionAsync(async () => {
@@ -143,18 +154,20 @@ export async function applyRemote(db: SqlDb, rows: RemoteFoodLogRow[]): Promise<
       await db.runAsync(
         `INSERT INTO food_log
            (id, account_id, food_source, food_ref, quantity, unit, meal_type, logged_at, source,
-            is_estimate, is_deleted, updated_at, kcal, protein_g, fat_g, carb_g, is_dirty)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            is_estimate, is_deleted, updated_at, kcal, protein_g, fat_g, carb_g, food_name, is_dirty)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
          ON CONFLICT (id) DO UPDATE SET
            account_id = excluded.account_id, food_source = excluded.food_source, food_ref = excluded.food_ref,
            quantity = excluded.quantity, unit = excluded.unit, meal_type = excluded.meal_type,
            logged_at = excluded.logged_at, source = excluded.source, is_estimate = excluded.is_estimate,
            is_deleted = excluded.is_deleted, updated_at = excluded.updated_at, kcal = excluded.kcal,
-           protein_g = excluded.protein_g, fat_g = excluded.fat_g, carb_g = excluded.carb_g, is_dirty = 0`,
+           protein_g = excluded.protein_g, fat_g = excluded.fat_g, carb_g = excluded.carb_g,
+           food_name = COALESCE(excluded.food_name, food_log.food_name), is_dirty = 0`,
         [
           row.id, row.accountId, row.foodSource, row.foodRef, row.quantity, row.unit, row.mealType,
           row.loggedAt, row.source, row.isEstimate ? 1 : 0, row.isDeleted ? 1 : 0, row.updatedAt,
           row.macros?.kcal ?? null, row.macros?.proteinG ?? null, row.macros?.fatG ?? null, row.macros?.carbG ?? null,
+          row.foodName,
         ],
       );
     }

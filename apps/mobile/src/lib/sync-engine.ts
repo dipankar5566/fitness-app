@@ -207,6 +207,7 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
         isDeleted,
         updatedAt: row.updatedAt as string,
         macros: (row.macros as RemoteFoodLogRow["macros"]) ?? null,
+        foodName: (row.foodName as string | undefined) ?? null,
       });
     } else if (change.table === "custom_food") {
       customFoodRows.push({

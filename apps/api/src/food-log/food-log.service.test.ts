@@ -72,6 +72,7 @@ describe("FoodLogService", () => {
           [
             "L002",
             {
+              name: "Idli",
               kcalPer100g: 130,
               proteinGPer100g: 2.7,
               fatGPer100g: 0.3,
@@ -85,6 +86,7 @@ describe("FoodLogService", () => {
       const [entry] = await service.listByDate("account-1", "2026-11-14");
 
       expect(entry.macros).toEqual({ kcal: 260, proteinG: 5.4, fatG: 0.6, carbG: 56 });
+      expect(entry.food_name).toBe("Idli");
     });
 
     it("leaves macros null when the food has no nutrient summary (e.g. custom/packaged)", async () => {
@@ -122,13 +124,14 @@ describe("FoodLogService", () => {
         ],
       });
       packagedFood.getNutrientSummaries.mockResolvedValue(
-        new Map([["packaged-food-1", { kcal: 500, proteinG: 10, fatG: 20, carbG: 60 }]]),
+        new Map([["packaged-food-1", { name: "Cola", brand: "Acme", kcal: 500, proteinG: 10, fatG: 20, carbG: 60 }]]),
       );
 
       const [entry] = await service.listByDate("account-1", "2026-11-14");
 
       expect(packagedFood.getNutrientSummaries).toHaveBeenCalledWith(["packaged-food-1"]);
       expect(entry.macros).toEqual({ kcal: 250, proteinG: 5, fatG: 10, carbG: 30 });
+      expect(entry.food_name).toBe("Cola (Acme)");
     });
 
     it("computes macros for a custom-food entry from its indb-sourced ingredients", async () => {
@@ -150,19 +153,28 @@ describe("FoodLogService", () => {
           rows: [
             { custom_food_id: "custom-food-1", food_source: "indb", food_ref: "L002", quantity_g: "50" },
           ],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ id: "custom-food-1", name: "Overnight oats" }],
         });
       food.getNutrientSummaries.mockResolvedValue(
         new Map([
-          ["L002", { kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
+          ["L002", { name: "Idli", kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
         ]),
       );
 
       const [entry] = await service.listByDate("account-1", "2026-11-14");
 
       expect(entry.macros).toEqual({ kcal: 130, proteinG: 2.7, fatG: 0.3, carbG: 28 });
+      expect(entry.food_name).toBe("Overnight oats");
       expect(db.query).toHaveBeenNthCalledWith(
         2,
         expect.stringContaining("FROM app.custom_food_ingredient"),
+        [["custom-food-1"]],
+      );
+      expect(db.query).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining("FROM app.custom_food"),
         [["custom-food-1"]],
       );
     });

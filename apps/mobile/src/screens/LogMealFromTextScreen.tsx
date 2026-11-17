@@ -254,6 +254,7 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
           isDeleted: false,
           updatedAt: now,
           macros: computePreview(item, detail),
+          foodName: item.foodName,
         });
       }
       trackEvent("ai_meal_logged");

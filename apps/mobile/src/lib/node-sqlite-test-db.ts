@@ -12,6 +12,14 @@ const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as typeof
  * this instead of mocking the database away.
  */
 export async function createTestDb(): Promise<SqlDb> {
+  const db = createUnmigratedTestDb();
+  await migrate(db);
+  return db;
+}
+
+/** Same wrapper as createTestDb, without running migrate() - lets db-schema.test.ts construct a
+ * specific pre-migration (or corrupted) schema state by hand before calling migrate() itself. */
+export function createUnmigratedTestDb(): SqlDb {
   const raw = new DatabaseSync(":memory:");
 
   const db: SqlDb = {
@@ -40,6 +48,5 @@ export async function createTestDb(): Promise<SqlDb> {
     },
   };
 
-  await migrate(db);
   return db;
 }

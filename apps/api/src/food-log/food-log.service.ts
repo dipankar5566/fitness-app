@@ -28,6 +28,11 @@ export interface MacroBreakdown {
 
 export interface FoodLogEntryWithMacros extends FoodLogRow {
   macros: MacroBreakdown | null;
+  /** The food's display name, resolved fresh from food_source/food_ref every time (never stored
+   * on app.food_log itself) - apps/mobile snapshots this locally as food_log.food_name so the
+   * Today diary can show it without a lookup. Null if the referenced food/custom_food/
+   * packaged_food can't be resolved (e.g. deleted server-side). */
+  food_name: string | null;
 }
 
 export type { FoodLogRow };
@@ -152,21 +157,23 @@ export async function enrichWithMacros(
   const summaryByCode = await food.getNutrientSummaries(indbCodes);
   const perGramByCustomFoodId = await computeCustomFoodMacrosPerGram(customFoodIds, food, db);
   const summaryByPackagedFoodId = await packagedFood.getNutrientSummaries(packagedFoodIds);
+  const customFoodNameById = await getCustomFoodNames(customFoodIds, db);
 
   return rows.map((row) => {
     if (row.food_source === "indb") {
       const summary = summaryByCode.get(row.food_ref);
       if (!summary) {
-        return { ...row, macros: null };
+        return { ...row, macros: null, food_name: null };
       }
       const grams = resolveGrams(Number(row.quantity), row.unit, summary.servingGramsByName);
-      return { ...row, macros: computeMacros(grams, summary) };
+      return { ...row, macros: computeMacros(grams, summary), food_name: summary.name };
     }
 
     if (row.food_source === "custom") {
       const perGram = perGramByCustomFoodId.get(row.food_ref);
+      const food_name = customFoodNameById.get(row.food_ref) ?? null;
       if (!perGram) {
-        return { ...row, macros: null };
+        return { ...row, macros: null, food_name };
       }
       const gramsLogged = Number(row.quantity); // custom foods: quantity is always grams of the recipe
       const scaled = (perGramValue: number | null) =>
@@ -179,13 +186,14 @@ export async function enrichWithMacros(
           fatG: scaled(perGram.fatG),
           carbG: scaled(perGram.carbG),
         },
+        food_name,
       };
     }
 
     if (row.food_source === "packaged") {
       const perHundredGrams = summaryByPackagedFoodId.get(row.food_ref);
       if (!perHundredGrams) {
-        return { ...row, macros: null };
+        return { ...row, macros: null, food_name: null };
       }
       const gramsLogged = Number(row.quantity); // packaged foods: quantity is always grams, same v1 simplification as custom foods
       const scale = gramsLogged / 100;
@@ -198,11 +206,26 @@ export async function enrichWithMacros(
           fatG: scaled(perHundredGrams.fatG),
           carbG: scaled(perHundredGrams.carbG),
         },
+        food_name: perHundredGrams.brand ? `${perHundredGrams.name} (${perHundredGrams.brand})` : perHundredGrams.name,
       };
     }
 
-    return { ...row, macros: null };
+    return { ...row, macros: null, food_name: null };
   });
+}
+
+/** Batched name lookup for custom_food rows, mirroring the batch-everything-up-front style
+ * computeCustomFoodMacrosPerGram already uses - one query for however many distinct custom foods
+ * appear in this call's rows, not one per row. */
+async function getCustomFoodNames(customFoodIds: string[], db: DatabaseService): Promise<Map<string, string>> {
+  if (customFoodIds.length === 0) {
+    return new Map();
+  }
+  const result = await db.query<{ id: string; name: string }>(
+    "SELECT id, name FROM app.custom_food WHERE id = ANY($1)",
+    [customFoodIds],
+  );
+  return new Map(result.rows.map((row) => [row.id, row.name]));
 }
 
 @Injectable()

@@ -182,6 +182,7 @@ const foodLogEntryRowSchema = z.object({
   source: z.string(),
   is_estimate: z.boolean(),
   macros: macroBreakdownSchema.nullable().optional(),
+  food_name: z.string().nullable().optional(),
 });
 export type FoodLogEntryRow = z.infer<typeof foodLogEntryRowSchema>;
 

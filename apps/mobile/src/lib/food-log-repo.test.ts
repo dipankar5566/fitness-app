@@ -26,6 +26,7 @@ const ROW: LocalFoodLogRow = {
   isDeleted: false,
   updatedAt: "2026-11-14T12:00:00.000Z",
   macros: { kcal: 195, proteinG: 4, fatG: 0.5, carbG: 42 },
+  foodName: "Idli",
 };
 
 describe("food-log-repo", () => {
@@ -150,6 +151,27 @@ describe("food-log-repo", () => {
       const [entry] = await listByLocalDay(db, "account-1", "2026-11-14");
       expect(entry.quantity).toBe(999);
       expect(await getDirty(db)).toEqual([]); // applyRemote always writes is_dirty = 0
+    });
+
+    it("backfills food_name onto a pre-existing row that was logged before the column existed", async () => {
+      // Simulates a row from before this fix: inserted with no food_name, server catches up on
+      // the next pull with the real resolved name.
+      await insert(db, { ...ROW, foodName: null });
+
+      await applyRemote(db, [{ ...ROW, updatedAt: "2026-11-14T16:00:00.000Z", foodName: "Idli" }]);
+
+      const [entry] = await listByLocalDay(db, "account-1", "2026-11-14");
+      expect(entry.foodName).toBe("Idli");
+    });
+
+    it("keeps the existing local name instead of nulling it out when the incoming row has none", async () => {
+      await applyRemote(db, [ROW]); // ROW.foodName = "Idli", clean
+
+      await applyRemote(db, [{ ...ROW, quantity: 999, updatedAt: "2026-11-14T16:00:00.000Z", foodName: null }]);
+
+      const [entry] = await listByLocalDay(db, "account-1", "2026-11-14");
+      expect(entry.quantity).toBe(999);
+      expect(entry.foodName).toBe("Idli"); // not wiped by the null incoming name
     });
   });
 });

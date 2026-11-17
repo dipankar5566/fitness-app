@@ -71,6 +71,7 @@ export function MyFoodsScreen({ navigation, route }: Props) {
       // Custom-food macros are computed server-side from the recipe's ingredients (same as any
       // indb food) - this shows as "?" locally until the next sync fills it in.
       macros: null,
+      foodName: customFood.name,
     });
     trackEvent("custom_food_logged");
     void syncNow(db, API_URL, session.accessToken);
