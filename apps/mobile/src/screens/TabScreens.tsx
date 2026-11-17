@@ -202,8 +202,8 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
         <ListRow
           icon="robot-happy-outline"
           title="Coach"
-          subtitle="Coming soon"
-          trailing={<Badge label="soon" tone="warning" />}
+          subtitle="Ask about your targets, logs & training"
+          onPress={() => navigation.navigate("CoachChat", { accountId })}
         />
       </Card>
 

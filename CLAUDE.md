@@ -288,12 +288,27 @@ conversation in correct chronological order - plus unit tests in `packages/share
 prompt/floor/disclaimer cases) and `apps/api` (`CoachService`'s guardrail-enforcement paths with a
 mocked `AiService`/`ProfileService`/`FoodLogService`/`DatabaseService`).
 
+Mobile UI for coach chat is done: `apps/mobile`'s new `CoachChatScreen` (a visible medical-
+disclaimer banner above the thread, using shared `MEDICAL_DISCLAIMER` - always on, not just
+appended when the server decides a reply needs it) wraps the existing `POST /coach/message`/
+`GET /coach/messages` via two new `api.ts` functions (`sendCoachMessage`/`getCoachHistory`).
+Deliberately online-only, no offline outbox unlike food/workout logging - every turn costs real
+money (`AiUsageService`'s daily quota) and needs fresh grounding (today's logs/targets), so
+queuing a message to send later would either go stale or silently fail the quota check with no
+feedback. A 403 (quota exceeded) is surfaced as a distinct `AiQuotaExceededError`, not a generic
+`ApiError`, so the screen can show "daily limit reached" instead of a bare failure; the optimistic
+local user-bubble is rolled back and the draft restored on any send failure so nothing is lost.
+Wired into `RootNavigator` (`CoachChat` route) from `TabScreens.tsx`'s `MeTabScreen` (replacing the
+former "Coming soon" row) and a new "Coach" quick action on `HomeScreen`. Verified: unit tests in
+`apps/mobile` (`api.test.ts` - happy path and the 403-to-`AiQuotaExceededError` mapping) plus a
+live smoke test against the real API/`indb` database (guest auth → `GET /coach/messages` returns
+`[]` with the right shape, `POST /coach/message` passes auth and reaches `CoachService` - the
+reply itself couldn't be exercised in this pass since the running dev server had no
+`OPENAI_API_KEY` configured, a local environment gap rather than a client bug; the server-side
+reply path was already verified end-to-end when `CoachService` was built, see above).
+
 Still to do for M5: Health Connect read (steps/exercise/weight) + opt-in write; meal/workout
-reminders + logging streak. Mobile UI for coach chat (a `CoachChatScreen` with a visible medical-
-disclaimer banner, wired into `RootNavigator` and replacing the "Coming soon" `Coach` row already
-sitting in `TabScreens.tsx`'s `MeTabScreen`) is also still pending - this increment was
-server-only, following the same build-the-API-first-then-the-screen cadence used for M3/M4's
-other features.
+reminders + logging streak.
 
 **`apps/mobile` UI/UX redesign (cross-cutting, not a roadmap milestone).** The app was functional
 but every screen was an unstyled stack of default RN `<Button>`s with no theme or navigation

@@ -1,4 +1,5 @@
 import {
+  coachMessageRequestSchema,
   createFoodLogRequestSchema,
   onboardingRequestSchema,
   syncPullResponseSchema,
@@ -21,6 +22,10 @@ const guestAuthResponseSchema = z.object({
 export type GuestAuthResponse = z.infer<typeof guestAuthResponseSchema>;
 
 export class ApiError extends Error {}
+
+/** The AI daily-quota guard (apps/api/src/ai/ai-usage.service.ts) rejects with 403 - distinct from
+ * a generic ApiError so the coach screen can show "daily limit reached" instead of a bare error. */
+export class AiQuotaExceededError extends ApiError {}
 
 /** A `fetch` rejection with no server response (offline, DNS failure, timeout) - as opposed to an
  * `ApiError` (server responded, just not with 2xx) or a `ZodError` (server responded with a bad shape). */
@@ -399,4 +404,49 @@ export async function pullSync(
     throw new ApiError(`sync pull failed with status ${response.status}`);
   }
   return syncPullResponseSchema.parse(await response.json());
+}
+
+const coachMessageResponseSchema = z.object({ reply: z.string() });
+
+/** One coach-chat turn (PRD §5.5/ARCHITECTURE.md §5). The server holds the conversation history
+ * and grounding data (CoachService.sendMessage) - the client only ever sends the new message
+ * text. A 403 means the account hit its daily AI quota (AiUsageService) - surfaced as a distinct
+ * error type so the screen can show a specific message instead of a generic failure. */
+export async function sendCoachMessage(
+  apiUrl: string,
+  accessToken: string,
+  message: string,
+): Promise<string> {
+  const response = await fetch(`${apiUrl}/coach/message`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(coachMessageRequestSchema.parse({ message })),
+  });
+  if (response.status === 403) {
+    throw new AiQuotaExceededError("coach message failed: daily AI quota exceeded");
+  }
+  if (!response.ok) {
+    throw new ApiError(`coach message failed with status ${response.status}`);
+  }
+  return coachMessageResponseSchema.parse(await response.json()).reply;
+}
+
+const coachMessageRowSchema = z.object({
+  id: z.string(),
+  account_id: z.string(),
+  role: z.enum(["user", "assistant", "tool"]),
+  content: z.string(),
+  created_at: z.string(),
+});
+export type CoachMessageRow = z.infer<typeof coachMessageRowSchema>;
+
+/** Full chat history (CoachService.getHistory - last CHAT_HISTORY_LIMIT turns), oldest first. */
+export async function getCoachHistory(apiUrl: string, accessToken: string): Promise<CoachMessageRow[]> {
+  const response = await fetch(`${apiUrl}/coach/messages`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    throw new ApiError(`coach history failed with status ${response.status}`);
+  }
+  return z.array(coachMessageRowSchema).parse(await response.json());
 }

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  AiQuotaExceededError,
   ApiError,
   createFoodLog,
   createGuestAccount,
   deleteFoodLog,
+  getCoachHistory,
   getFoodDetail,
   getProfile,
   isNetworkError,
@@ -16,6 +18,7 @@ import {
   pushSync,
   searchExercises,
   searchFoods,
+  sendCoachMessage,
   submitOnboarding,
 } from "./api";
 
@@ -580,6 +583,81 @@ describe("sync client", () => {
     );
 
     await expect(pullSync("http://localhost:3001", "token-1", null)).rejects.toThrow(ApiError);
+  });
+});
+
+describe("sendCoachMessage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("posts the message with auth and returns the reply", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ reply: "Eat more protein." }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const reply = await sendCoachMessage("http://localhost:3001", "token-1", "How much protein?");
+
+    expect(reply).toBe("Eat more protein.");
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/coach/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-1" },
+      body: JSON.stringify({ message: "How much protein?" }),
+    });
+  });
+
+  it("throws AiQuotaExceededError on a 403 (daily quota hit)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 403 })),
+    );
+
+    await expect(sendCoachMessage("http://localhost:3001", "token-1", "hi")).rejects.toThrow(
+      AiQuotaExceededError,
+    );
+  });
+
+  it("throws plain ApiError on any other failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 500 })),
+    );
+
+    const error = await sendCoachMessage("http://localhost:3001", "token-1", "hi").catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).not.toBeInstanceOf(AiQuotaExceededError);
+  });
+});
+
+describe("getCoachHistory", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches /coach/messages with auth and returns the parsed rows", async () => {
+    const rows = [
+      { id: "m1", account_id: "a", role: "user" as const, content: "hi", created_at: "2026-11-14T06:00:00.000Z" },
+      { id: "m2", account_id: "a", role: "assistant" as const, content: "hello", created_at: "2026-11-14T06:00:01.000Z" },
+    ];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(rows), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getCoachHistory("http://localhost:3001", "token-1");
+
+    expect(result).toEqual(rows);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/coach/messages", {
+      headers: { Authorization: "Bearer token-1" },
+    });
+  });
+
+  it("throws ApiError when the request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 401 })),
+    );
+
+    await expect(getCoachHistory("http://localhost:3001", "token-1")).rejects.toThrow(ApiError);
   });
 });
 

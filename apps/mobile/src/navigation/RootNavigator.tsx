@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { Exercise } from "../lib/api";
 import { MainTabs } from "./MainTabs";
 import { BarcodeScanScreen } from "../screens/BarcodeScanScreen";
+import { CoachChatScreen } from "../screens/CoachChatScreen";
 import { CreateCustomFoodScreen } from "../screens/CreateCustomFoodScreen";
 import { ExerciseDetailScreen } from "../screens/ExerciseDetailScreen";
 import { ExerciseLibraryScreen } from "../screens/ExerciseLibraryScreen";
@@ -49,6 +50,7 @@ export type RootStackParamList = {
   };
   BarcodeScan: { accountId: string };
   LogPackagedFood: { accountId: string; barcode: string };
+  CoachChat: { accountId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -125,6 +127,7 @@ export function RootNavigator() {
           component={LogPackagedFoodScreen}
           options={{ title: "Log product" }}
         />
+        <Stack.Screen name="CoachChat" component={CoachChatScreen} options={{ title: "Coach" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
