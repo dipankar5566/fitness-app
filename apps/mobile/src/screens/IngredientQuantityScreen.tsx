@@ -1,11 +1,13 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
+import { AppText, Button, Screen, TextField } from "../components/ui";
 import { getFoodDetail, type FoodDetail } from "../lib/api";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { cacheFood, getCachedFood } from "../lib/food-cache-repo";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "IngredientQuantity">;
 
@@ -51,50 +53,35 @@ export function IngredientQuantityScreen({ navigation, route }: Props) {
 
   if (loadFailed) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>Could not load this food. Go back and try again.</Text>
-      </View>
+      <Screen>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <AppText color={colors.error} center>Could not load this food. Go back and try again.</AppText>
+        </View>
+      </Screen>
     );
   }
 
   if (!detail) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
+      <Screen>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{detail.name}</Text>
-      <Text style={styles.subtitle}>
+    <Screen>
+      <AppText variant="h1">{detail.name}</AppText>
+      <AppText variant="body" color={colors.textSecondary} style={{ marginTop: space.xxs, marginBottom: space.lg }}>
         Per 100g: {detail.nutrientsPer100g.kcal ?? "?"} kcal · {detail.nutrientsPer100g.proteinG ?? "?"}g protein
-      </Text>
+      </AppText>
 
-      <Text style={styles.label}>Amount (grams)</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        value={quantityG}
-        onChangeText={setQuantityG}
-      />
+      <TextField label="Amount (grams)" keyboardType="numeric" value={quantityG} onChangeText={setQuantityG} />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.button}>
-        <Button title="Add to recipe" onPress={handleConfirm} />
-      </View>
-    </View>
+      {error ? <AppText color={colors.error} center style={{ marginTop: space.lg }}>{error}</AppText> : null}
+      <Button title="Add to recipe" onPress={handleConfirm} style={{ marginTop: space.xxl }} />
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 20, fontWeight: "700" },
-  subtitle: { color: "#666", marginTop: 4, marginBottom: 16 },
-  label: { fontWeight: "600", marginTop: 16, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10 },
-  error: { color: "#c00", textAlign: "center", marginTop: 16 },
-  button: { marginTop: 24 },
-});

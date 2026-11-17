@@ -9,7 +9,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import { useCallback, useEffect, useState } from "react";
-import { Button, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, View } from "react-native";
+import { AppText, Button, Card, TextField } from "../components/ui";
 import { trackEvent } from "../lib/analytics";
 import { type Program, type ProgramDay } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
@@ -29,6 +30,7 @@ import {
   type LocalWorkoutSet,
 } from "../lib/workout-repo";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, radius, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "WorkoutSession">;
 
@@ -210,134 +212,99 @@ export function WorkoutSessionScreen({ navigation, route }: Props) {
 
   if (!session) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>No workout in progress.</Text>
-        <View style={styles.button}>
-          <Button title="Start workout" onPress={() => void handleStart()} />
-        </View>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: space.xxl, backgroundColor: colors.bg }}>
+        <AppText color={colors.textSecondary} style={{ marginBottom: space.lg }}>No workout in progress.</AppText>
+        <Button title="Start workout" onPress={() => void handleStart()} style={{ minWidth: 180 }} />
       </View>
     );
   }
 
   return (
     <FlatList
-      style={styles.container}
-      contentContainerStyle={styles.content}
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
       data={sets}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
-        <View style={styles.header}>
-          <Text style={styles.startedAt}>Started {new Date(session.startedAt).toLocaleTimeString()}</Text>
+        <View>
+          <AppText color={colors.textSecondary} style={{ marginBottom: space.sm }}>
+            Started {new Date(session.startedAt).toLocaleTimeString()}
+          </AppText>
 
           {pendingExercise ? (
-            <View style={styles.form}>
-              <Text style={styles.formTitle}>{pendingExercise.name}</Text>
+            <Card>
+              <AppText variant="h3">{pendingExercise.name}</AppText>
               {priorPrSummary && (priorPrSummary.bestWeightKg !== null || priorPrSummary.bestEstimatedOneRm !== null) ? (
-                <Text style={styles.prInfo}>
+                <AppText variant="caption" color={colors.textSecondary} numbers style={{ marginTop: space.xxs }}>
                   Best: {priorPrSummary.bestWeightKg} kg
                   {priorPrSummary.bestEstimatedOneRm !== null
                     ? ` · Est. 1RM: ${priorPrSummary.bestEstimatedOneRm} kg`
                     : ""}
-                </Text>
+                </AppText>
               ) : null}
-              <Text style={styles.label}>Reps</Text>
-              <TextInput style={styles.input} keyboardType="numeric" value={reps} onChangeText={setReps} />
-              <Text style={styles.label}>Weight (kg)</Text>
-              <TextInput style={styles.input} keyboardType="numeric" value={weightKg} onChangeText={setWeightKg} />
-              <Text style={styles.label}>RPE (optional, 1-10)</Text>
-              <TextInput style={styles.input} keyboardType="numeric" value={rpe} onChangeText={setRpe} />
-              <Pressable style={styles.warmupRow} onPress={() => setIsWarmup((w) => !w)}>
-                <Text style={styles.warmupLabel}>{isWarmup ? "☑" : "☐"} Warm-up set</Text>
+              <View style={{ marginTop: space.md, gap: space.sm }}>
+                <TextField label="Reps" keyboardType="numeric" value={reps} onChangeText={setReps} />
+                <TextField label="Weight (kg)" keyboardType="numeric" value={weightKg} onChangeText={setWeightKg} />
+                <TextField label="RPE (optional, 1-10)" keyboardType="numeric" value={rpe} onChangeText={setRpe} />
+              </View>
+              <Pressable onPress={() => setIsWarmup((w) => !w)} style={{ marginTop: space.md }}>
+                <AppText variant="bodyMedium">{isWarmup ? "☑" : "☐"} Warm-up set</AppText>
               </Pressable>
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-              <View style={styles.button}>
-                <Button title="Save set" onPress={() => void handleSaveSet()} />
-              </View>
-              <View style={styles.button}>
-                <Button title="Cancel" onPress={() => setPendingExercise(null)} color="#888" />
-              </View>
-            </View>
+              {error ? <AppText color={colors.error} style={{ marginTop: space.sm }}>{error}</AppText> : null}
+              <Button title="Save set" onPress={() => void handleSaveSet()} style={{ marginTop: space.md }} />
+              <Button title="Cancel" variant="ghost" onPress={() => setPendingExercise(null)} style={{ marginTop: space.sm }} />
+            </Card>
           ) : (
-            <View style={styles.button}>
-              {newPrFlags ? <Text style={styles.prBanner}>{describeNewPr(newPrFlags)}</Text> : null}
+            <View>
+              {newPrFlags ? (
+                <View style={{ backgroundColor: colors.successTonal, borderRadius: radius.md, padding: space.md, marginBottom: space.md }}>
+                  <AppText variant="bodyMedium" color={colors.success} center>{describeNewPr(newPrFlags)}</AppText>
+                </View>
+              ) : null}
               {todaysPlan ? (
-                <View style={styles.plan}>
-                  <Text style={styles.planTitle}>Today's plan: {todaysPlan.name}</Text>
-                  {todaysPlan.exercises.map((exercise) => (
+                <Card style={{ marginBottom: space.md }}>
+                  <AppText variant="h3" style={{ marginBottom: space.sm }}>Today's plan: {todaysPlan.name}</AppText>
+                  {todaysPlan.exercises.map((exercise, index) => (
                     <Pressable
                       key={exercise.exerciseId}
-                      style={styles.planRow}
                       onPress={() => void selectExerciseToLog({ id: exercise.exerciseId, name: exercise.exerciseName })}
+                      style={[
+                        { flexDirection: "row", justifyContent: "space-between", paddingVertical: space.sm },
+                        index > 0 && { borderTopWidth: 1, borderTopColor: colors.separator },
+                      ]}
                     >
-                      <Text style={styles.planExercise}>{exercise.exerciseName}</Text>
-                      <Text style={styles.planTarget}>
+                      <AppText variant="bodyMedium" style={{ flex: 1 }}>{exercise.exerciseName}</AppText>
+                      <AppText color={colors.textSecondary} numbers>
                         {exercise.targetSets} × {exercise.targetReps ?? "-"}
-                      </Text>
+                      </AppText>
                     </Pressable>
                   ))}
-                </View>
+                </Card>
               ) : null}
               <Button
                 title="Add exercise"
+                variant="secondary"
                 onPress={() => navigation.navigate("ExerciseLibrary", { accountId, mode: "pickExercise" })}
               />
             </View>
           )}
 
-          <View style={styles.button}>
-            <Button title="End workout" onPress={() => void handleEnd()} color="#c00" />
-          </View>
-          {sets.length === 0 ? <Text style={styles.empty}>No sets logged yet.</Text> : null}
+          <Button title="End workout" variant="danger" onPress={() => void handleEnd()} style={{ marginTop: space.lg }} />
+          {sets.length === 0 ? (
+            <AppText color={colors.textTertiary} center style={{ marginTop: space.lg }}>No sets logged yet.</AppText>
+          ) : null}
         </View>
       }
       renderItem={({ item }) => (
-        <View style={styles.setRow}>
-          <Text style={styles.exerciseName}>{item.exerciseName ?? item.exerciseId}</Text>
-          <Text style={styles.setMeta}>
+        <View style={{ paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: colors.separator }}>
+          <AppText variant="bodyMedium">{item.exerciseName ?? item.exerciseId}</AppText>
+          <AppText variant="caption" color={colors.textSecondary} numbers style={{ marginTop: space.xxs }}>
             Set {item.setNo}: {item.reps} reps × {item.weightKg} kg
             {item.rpe !== null ? ` @ RPE ${item.rpe}` : ""}
             {item.isWarmup ? " (warm-up)" : ""}
-          </Text>
+          </AppText>
         </View>
       )}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  emptyTitle: { color: "#666", marginBottom: 16 },
-  header: { gap: 4 },
-  startedAt: { color: "#666", marginBottom: 8 },
-  button: { marginTop: 12 },
-  form: { marginTop: 8, padding: 12, borderWidth: 1, borderColor: "#eee", borderRadius: 8 },
-  formTitle: { fontSize: 16, fontWeight: "600" },
-  prInfo: { color: "#666", marginTop: 4, fontSize: 13 },
-  prBanner: { color: "#0a7d2b", fontWeight: "600", marginBottom: 8, textAlign: "center" },
-  plan: { marginBottom: 12, padding: 12, borderWidth: 1, borderColor: "#eee", borderRadius: 8 },
-  planTitle: { fontWeight: "600", marginBottom: 6 },
-  planRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-    borderTopWidth: 1,
-    borderTopColor: "#f3f3f3",
-  },
-  planExercise: { flex: 1 },
-  planTarget: { color: "#666" },
-  label: { fontWeight: "600", marginTop: 10, marginBottom: 4 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8 },
-  warmupRow: { marginTop: 10 },
-  warmupLabel: { fontSize: 14 },
-  error: { color: "#c00", marginTop: 8 },
-  empty: { color: "#888", marginTop: 16, textAlign: "center" },
-  setRow: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  exerciseName: { fontWeight: "600" },
-  setMeta: { color: "#444", marginTop: 2 },
-});

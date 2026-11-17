@@ -1,8 +1,10 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Button, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { AppText, Button, Screen } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "BarcodeScan">;
 
@@ -22,20 +24,22 @@ export function BarcodeScanScreen({ navigation, route }: Props) {
 
   if (!permission) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
+      <Screen>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </Screen>
     );
   }
 
   if (!permission.granted) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.message}>Camera permission is required to scan a barcode.</Text>
-        <View style={styles.button}>
-          <Button title="Grant permission" onPress={() => void requestPermission()} />
+      <Screen>
+        <View style={styles.center}>
+          <AppText center color={colors.textSecondary}>Camera permission is required to scan a barcode.</AppText>
+          <Button title="Grant permission" onPress={() => void requestPermission()} style={{ marginTop: space.lg, minWidth: 160 }} />
         </View>
-      </View>
+      </Screen>
     );
   }
 
@@ -54,16 +58,16 @@ export function BarcodeScanScreen({ navigation, route }: Props) {
               }
         }
       />
-      <Text style={styles.hint}>Point the camera at a product barcode</Text>
+      <View style={styles.hintBar}>
+        <AppText center color={colors.textOnPrimary}>Point the camera at a product barcode</AppText>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: "#000" },
   camera: { flex: 1 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  message: { textAlign: "center" },
-  button: { marginTop: 16 },
-  hint: { textAlign: "center", padding: 12, color: "#666" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.xxl },
+  hintBar: { padding: space.md, backgroundColor: "rgba(0,0,0,0.55)" },
 });

@@ -1,11 +1,13 @@
 import { exerciseEquipmentSchema, exerciseMuscleSchema } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, View } from "react-native";
 import { ChipSelect } from "../components/ChipSelect";
+import { AppText, EmptyState, ListRow, Screen } from "../components/ui";
 import { type Exercise, searchExercises } from "../lib/api";
 import { API_URL } from "../lib/env";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ExerciseLibrary">;
 
@@ -46,53 +48,42 @@ export function ExerciseLibraryScreen({ navigation, route }: Props) {
   }, [muscle, equipment]);
 
   return (
-    <View style={styles.container}>
-      <ChipSelect label="Muscle" options={MUSCLE_OPTIONS} value={muscle} onChange={setMuscle} formatOption={formatLabel} />
-      <ChipSelect
-        label="Equipment"
-        options={EQUIPMENT_OPTIONS}
-        value={equipment}
-        onChange={setEquipment}
-        formatOption={formatLabel}
-      />
-      {isLoading ? <ActivityIndicator style={styles.spinner} /> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+    <Screen padded={false}>
+      <View style={{ paddingHorizontal: space.lg, paddingTop: space.lg }}>
+        <ChipSelect label="Muscle" options={MUSCLE_OPTIONS} value={muscle} onChange={setMuscle} formatOption={formatLabel} />
+        <ChipSelect
+          label="Equipment"
+          options={EQUIPMENT_OPTIONS}
+          value={equipment}
+          onChange={setEquipment}
+          formatOption={formatLabel}
+        />
+      </View>
+      {isLoading ? <ActivityIndicator style={{ marginTop: space.md }} color={colors.primary} /> : null}
+      {error ? (
+        <AppText color={colors.error} center style={{ marginTop: space.md, paddingHorizontal: space.lg }}>
+          {error}
+        </AppText>
+      ) : null}
       <FlatList
-        style={styles.list}
+        style={{ marginTop: space.sm }}
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xl }}
         data={exercises}
         keyExtractor={(item) => item.id}
+        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.separator }} />}
         renderItem={({ item }) => (
-          <Pressable
-            style={styles.row}
+          <ListRow
+            title={item.name}
+            subtitle={`${item.equipment ?? "no equipment"} · ${item.primaryMuscles.join(", ")}`}
             onPress={() =>
               route.params?.mode === "pickExercise"
                 ? navigation.navigate("WorkoutSession", { accountId: route.params.accountId, pickedExercise: item })
                 : navigation.navigate("ExerciseDetail", { exercise: item })
             }
-          >
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.meta}>
-              {item.equipment ?? "no equipment"} · {item.primaryMuscles.join(", ")}
-            </Text>
-          </Pressable>
+          />
         )}
-        ListEmptyComponent={!isLoading ? <Text style={styles.empty}>No exercises match.</Text> : undefined}
+        ListEmptyComponent={!isLoading ? <EmptyState icon="dumbbell" title="No exercises match." /> : undefined}
       />
-    </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  list: { marginTop: 8 },
-  spinner: { marginTop: 12 },
-  error: { color: "#c00", marginTop: 12, textAlign: "center" },
-  row: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  name: { fontSize: 16 },
-  meta: { color: "#888", fontSize: 12, textTransform: "capitalize", marginTop: 2 },
-  empty: { textAlign: "center", marginTop: 24, color: "#888" },
-});

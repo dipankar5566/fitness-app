@@ -8,3 +8,4 @@ export * from "./diet.js";
 export * from "./workout-prs.js";
 export * from "./programs.js";
 export * from "./coach-safety.js";
+export * from "./meal-summary.js";

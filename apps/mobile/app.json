@@ -23,7 +23,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@sentry/react-native/expo"
+      "@sentry/react-native/expo",
+      "expo-font"
     ]
   }
 }

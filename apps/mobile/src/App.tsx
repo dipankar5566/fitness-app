@@ -7,6 +7,7 @@ import { getDatabase } from "./lib/db";
 import { API_URL } from "./lib/env";
 import { syncNow } from "./lib/sync-engine";
 import { RootNavigator } from "./navigation/RootNavigator";
+import { useInterFonts } from "./theme";
 
 async function triggerSync(): Promise<void> {
   const [db, session] = await Promise.all([getDatabase(), loadGuestSession()]);
@@ -17,6 +18,7 @@ async function triggerSync(): Promise<void> {
 
 export default function App() {
   const [isDbReady, setIsDbReady] = useState(false);
+  const fontsLoaded = useInterFonts();
   const appState = useRef<AppStateStatus>(AppState.currentState as AppStateStatus);
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export default function App() {
     return () => subscription.remove();
   }, []);
 
-  if (!isDbReady) {
+  if (!isDbReady || !fontsLoaded) {
     return null;
   }
 

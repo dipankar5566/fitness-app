@@ -1,6 +1,6 @@
 # HealthifyMe Android App (v31.7) — Static Reverse-Engineering Report
 
-_Static analysis only (REA + JADX + custom DEX parser); nothing executed. Supporting files in this folder: schemas.sql, endpoints.md, features_endpoints.txt, models_*.txt, api.json, AndroidManifest.xml, tools/dexann.py._
+_Static analysis only (REA + JADX + custom DEX parser); nothing executed. Supporting files in this folder: schemas.sql, endpoints.md, features_endpoints.txt, models_*.txt, api.json, AndroidManifest.xml, tools/dexann.py, UI_UX.md (design/navigation teardown)._
 
 
 ## Context

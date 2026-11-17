@@ -3,7 +3,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import { useCallback, useState } from "react";
-import { Button, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, View } from "react-native";
+import { AppText, Button, EmptyState, ListRow, Screen, TextField } from "../components/ui";
 import { trackEvent } from "../lib/analytics";
 import { loadGuestSession } from "../lib/auth-storage";
 import { listCustomFoods, softDeleteCustomFood, type LocalCustomFood } from "../lib/custom-food-repo";
@@ -12,6 +13,7 @@ import { API_URL } from "../lib/env";
 import { insert } from "../lib/food-log-repo";
 import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MyFoods">;
 
@@ -89,52 +91,52 @@ export function MyFoodsScreen({ navigation, route }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <Screen padded={false}>
       <FlatList
+        contentContainerStyle={{ padding: space.lg }}
         data={customFoods}
         keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Text style={styles.empty}>No custom foods yet.</Text>}
+        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.separator }} />}
+        ListEmptyComponent={
+          <EmptyState icon="notebook-outline" title="No custom foods yet." subtitle="Create one to log it quickly next time." />
+        }
         renderItem={({ item }) => (
-          <View style={styles.row}>
-            <View style={styles.rowHeader}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Pressable onPress={() => handleDelete(item)}>
-                <Text style={styles.deleteLabel}>Delete</Text>
-              </Pressable>
-            </View>
+          <View style={{ paddingVertical: space.sm }}>
+            <ListRow
+              title={item.name}
+              trailing={
+                loggingId === item.id ? undefined : (
+                  <Button
+                    title="Log it"
+                    variant="secondary"
+                    onPress={() => {
+                      setLoggingId(item.id);
+                      setQuantityG("100");
+                      setError(null);
+                    }}
+                    style={{ height: 36, paddingHorizontal: space.md }}
+                  />
+                )
+              }
+            />
             {loggingId === item.id ? (
-              <View style={styles.logForm}>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  value={quantityG}
-                  onChangeText={setQuantityG}
-                />
-                <Button title="Confirm" onPress={() => handleConfirmLog(item)} />
+              <View style={{ flexDirection: "row", gap: space.sm, alignItems: "flex-end", marginTop: space.sm }}>
+                <View style={{ flex: 1 }}>
+                  <TextField keyboardType="numeric" value={quantityG} onChangeText={setQuantityG} />
+                </View>
+                <Button title="Confirm" onPress={() => void handleConfirmLog(item)} style={{ width: 110 }} />
               </View>
-            ) : (
-              <Button title="Log it" onPress={() => { setLoggingId(item.id); setQuantityG("100"); setError(null); }} />
-            )}
+            ) : null}
+            <Pressable onPress={() => void handleDelete(item)} style={{ marginTop: space.xs }}>
+              <AppText variant="caption" color={colors.error}>Delete</AppText>
+            </Pressable>
           </View>
         )}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.newButton}>
-        <Button title="+ New custom food" onPress={() => navigation.navigate("CreateCustomFood", { accountId })} />
+      {error ? <AppText color={colors.error} center style={{ marginBottom: space.sm }}>{error}</AppText> : null}
+      <View style={{ padding: space.lg, paddingTop: 0 }}>
+        <Button title="+ New custom food" variant="secondary" onPress={() => navigation.navigate("CreateCustomFood", { accountId })} />
       </View>
-    </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  empty: { color: "#888", textAlign: "center", marginTop: 24 },
-  row: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#eee", gap: 8 },
-  rowHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  name: { fontSize: 16, fontWeight: "600" },
-  deleteLabel: { color: "#c00" },
-  logForm: { flexDirection: "row", alignItems: "center", gap: 8 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8, width: 80 },
-  error: { color: "#c00", textAlign: "center", marginTop: 12 },
-  newButton: { marginTop: 16 },
-});

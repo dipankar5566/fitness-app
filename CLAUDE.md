@@ -290,9 +290,46 @@ mocked `AiService`/`ProfileService`/`FoodLogService`/`DatabaseService`).
 
 Still to do for M5: Health Connect read (steps/exercise/weight) + opt-in write; meal/workout
 reminders + logging streak. Mobile UI for coach chat (a `CoachChatScreen` with a visible medical-
-disclaimer banner, wired into `RootNavigator`/`HomeScreen`) is also still pending - this increment
-was server-only, following the same build-the-API-first-then-the-screen cadence used for M3/M4's
+disclaimer banner, wired into `RootNavigator` and replacing the "Coming soon" `Coach` row already
+sitting in `TabScreens.tsx`'s `MeTabScreen`) is also still pending - this increment was
+server-only, following the same build-the-API-first-then-the-screen cadence used for M3/M4's
 other features.
+
+**`apps/mobile` UI/UX redesign (cross-cutting, not a roadmap milestone).** The app was functional
+but every screen was an unstyled stack of default RN `<Button>`s with no theme or navigation
+structure. Static-analysis teardown of HealthifyMe v31.7 (REA + JADX + aapt2 against the real APK,
+read-only, no code/assets/strings copied - full findings in `healthifyme-re/UI_UX.md`) surfaced
+the patterns this redesign borrows: one calm brand colour + a warm neutral ramp instead of a
+different colour per screen, tabular numbers for metrics, bottom tabs instead of a button list,
+and a hero calorie-ring card driving the logging CTAs on Home instead of a separate menu.
+`apps/mobile/src/theme/` (`tokens.ts` - colors/space/radius/type scale; `fonts.ts` - Inter via
+`@expo-google-fonts/inter`, loaded in `App.tsx` before the navigator mounts) holds our own
+distinct identity (leaf green, not HealthifyMe's teal). `apps/mobile/src/components/ui.tsx` +
+`Charts.tsx` are the reusable primitives (`Screen`, `Card`, `AppText`, `Button`, `TextField`,
+`ListRow`, `SectionHeader`, `EmptyState`, `Badge`, `IconButton`, `ProgressRing`, `MacroBar`) every
+screen now uses instead of ad-hoc `StyleSheet`s; `ChipSelect` was restyled in place (same API).
+`@react-navigation/bottom-tabs` added: `navigation/MainTabs.tsx` is a new bottom-tab navigator
+(Today/Log/Workout/Me) registered as the **existing** `"Home"` stack screen in `RootNavigator.tsx`
+(route name deliberately kept, not renamed, so every pre-existing `navigate("Home", { accountId })`
+call site needed no changes - popping back to "Home" just refocuses whichever tab was active).
+`HomeScreen.tsx` ("Today") is the new hero: calorie ring + macro bars computed via
+`packages/shared/src/meal-summary.ts`'s new pure helpers (`groupFoodLogByMeal`/`sumKcal`/
+`calorieRingProgress`/`kcalRemaining`, unit-tested), a meal-grouped diary (breakfast/lunch/snack/
+dinner, each with a subtotal and a "+ Add" that pre-sets that meal via `FoodSearch`/`LogFood`'s new
+optional `presetMealType` route param), quick-log actions, and a workout-status card.
+`TabScreens.tsx` holds the three simpler tabs (Log = quick-action menu; Workout = session status +
+Programs/Exercise-library links; Me = targets/diet badge + a "Coach - coming soon" placeholder row
+for the pending M5 screen above) - `CACHED_GOAL_KEY`/`CACHED_PROFILE_KEY` moved into `kv-store.ts`
+once `MeTabScreen` needed the same cache `HomeScreen`/`GuestLoadingScreen` already wrote. Every
+other screen (food search/log/AI-meal/barcode flows, workout session, exercise library, programs,
+onboarding - now a one-question-per-step wizard with a progress bar) was restyled onto the same
+primitives; no business logic changed. Verified end-to-end on a real emulator (screenshots walked
+through Today/Log/Workout/Me/Programs/My-foods), catching and fixing two real bugs in the
+process: headerless tab screens weren't consuming the top safe-area inset (titles hid behind the
+status bar - fixed via `Screen`'s new `edges` prop), and `ListRow`'s subtitle had a blanket
+`textTransform: "capitalize"` that title-cased every word of multi-word subtitles (fixed by
+removing it and capitalizing only the one genuinely single-word case, `FoodSearchScreen`'s food
+type, at the call site). `pnpm lint && pnpm typecheck && pnpm test` all pass throughout.
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
@@ -368,11 +405,17 @@ apps/
                        ledger + daily quota), packaged-food (barcode scan via Open Food Facts),
                        coach (AI coach chat grounded in targets/logs, with server-enforced
                        ED-signal/calorie-floor/medical-disclaimer safety guardrails).
-  mobile/              Expo app (TypeScript, SDK 58), React Navigation stack. src/screens/,
-                       src/lib/ (api.ts client, analytics.ts, auth-storage.ts, env.ts, db.ts),
-                       src/components/ (ChipSelect, a generic enum picker reused across screens).
+  mobile/              Expo app (TypeScript, SDK 58). React Navigation: a root native-stack
+                       (RootNavigator.tsx) whose "Home" screen is a bottom-tab navigator
+                       (navigation/MainTabs.tsx - Today/Log/Workout/Me). src/theme/ (design
+                       tokens + Inter font loading), src/components/ (ui.tsx + Charts.tsx -
+                       reusable primitives every screen uses; ChipSelect), src/screens/
+                       (HomeScreen.tsx = Today; TabScreens.tsx = the other 3 tabs; one file per
+                       flow screen), src/lib/ (api.ts client, analytics.ts, auth-storage.ts,
+                       env.ts, db.ts).
 packages/
-  shared/              Pure TS: nutrition/target formulas (targets.ts) and Zod schemas
+  shared/              Pure TS: nutrition/target formulas (targets.ts), meal-grouping/calorie-ring
+                       math for the mobile Today screen (meal-summary.ts), and Zod schemas
                        (schemas.ts) shared by apps/api and apps/mobile. No I/O, no framework deps.
                        Two entry points, not one - see "Known trap" above before touching index.ts
                        or index.types.ts.
@@ -386,9 +429,11 @@ db/
 indb/                  Standalone tooling that built the INDB (CC BY) + USDA (CC0) food database
                        now loaded into the shared local Postgres `indb` database. Mature and
                        working - treat as read-only reference unless explicitly asked to change it.
-healthifyme-re/        Static teardown of a competitor app. Reference for ideas/architecture
-                       patterns ONLY. Never copy code, data, assets or strings from it into the
-                       app; it is not a dependency of anything under apps/ or packages/.
+healthifyme-re/        Static teardown of a competitor app (incl. UI_UX.md - design/navigation
+                       patterns, behind the apps/mobile redesign above). Reference for
+                       ideas/architecture patterns ONLY. Never copy code, data, assets or strings
+                       from it into the app; it is not a dependency of anything under apps/ or
+                       packages/.
 docs/
   PRD.md               Product requirements, personas, feature acceptance criteria, DPDP/legal.
   ARCHITECTURE.md       System design, full data model, sync protocol, AI gateway, hosting options.

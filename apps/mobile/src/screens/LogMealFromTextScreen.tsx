@@ -3,7 +3,8 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Button, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
+import { AppText, Badge, Button, Card, TextField } from "../components/ui";
 import { ChipSelect } from "../components/ChipSelect";
 import { trackEvent } from "../lib/analytics";
 import {
@@ -20,6 +21,7 @@ import { API_URL } from "../lib/env";
 import { insert } from "../lib/food-log-repo";
 import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LogMealFromText">;
 
@@ -267,37 +269,33 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
 
   return (
     <FlatList
-      style={styles.container}
-      contentContainerStyle={styles.content}
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
       data={draft}
       keyExtractor={(_, index) => String(index)}
       ListHeaderComponent={
         <View>
-          <Text style={styles.label}>Describe your meal</Text>
-          <TextInput
-            style={styles.textArea}
+          <TextField
+            label="Describe your meal"
             placeholder='e.g. "2 roti aur dal" or "idli sambar and filter coffee"'
             value={text}
             onChangeText={setText}
             multiline
+            style={{ minHeight: 60 }}
           />
-          {parseError ? <Text style={styles.error}>{parseError}</Text> : null}
-          <View style={styles.button}>
-            <Button
-              title={isParsing ? "Parsing..." : "Parse"}
-              onPress={() => void handleParse()}
-              disabled={isParsing || !text.trim()}
-            />
-          </View>
+          {parseError ? <AppText color={colors.error} center style={{ marginTop: space.sm }}>{parseError}</AppText> : null}
+          <Button
+            title={isParsing ? "Parsing..." : "Parse"}
+            onPress={() => void handleParse()}
+            loading={isParsing}
+            disabled={!text.trim()}
+            style={{ marginTop: space.md }}
+          />
 
-          <Text style={styles.orLabel}>or</Text>
-          <View style={styles.photoButtons}>
-            <View style={styles.photoButton}>
-              <Button title="Take a photo" onPress={() => void handleTakePhoto()} disabled={isParsing} />
-            </View>
-            <View style={styles.photoButton}>
-              <Button title="Choose from gallery" onPress={() => void handlePickPhoto()} disabled={isParsing} />
-            </View>
+          <AppText variant="caption" color={colors.textTertiary} center style={{ marginTop: space.md }}>or</AppText>
+          <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.sm }}>
+            <Button title="Take a photo" variant="secondary" onPress={() => void handleTakePhoto()} disabled={isParsing} style={{ flex: 1 }} />
+            <Button title="Choose from gallery" variant="secondary" onPress={() => void handlePickPhoto()} disabled={isParsing} style={{ flex: 1 }} />
           </View>
 
           {draft.length > 0 ? (
@@ -311,30 +309,32 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
         const unitOptions = ["g", ...(detail?.servingMeasures ?? []).map((measure) => measure.name)];
 
         return (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.itemName}>{item.foodName ?? item.rawName}</Text>
+          <Card style={{ marginTop: space.lg }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <AppText variant="h3" style={{ flex: 1 }} numberOfLines={1}>{item.foodName ?? item.rawName}</AppText>
               <Pressable onPress={() => removeItem(index)}>
-                <Text style={styles.removeLabel}>Remove</Text>
+                <AppText variant="caption" color={colors.error}>Remove</AppText>
               </Pressable>
             </View>
 
             {!item.foodRef ? (
               <>
-                <Text style={styles.noMatch}>No match found for "{item.rawName}".</Text>
+                <View style={{ marginTop: space.sm }}>
+                  <Badge label="no match" tone="warning" />
+                </View>
                 <Pressable
                   onPress={() =>
                     navigation.navigate("FoodSearch", { accountId, mode: "pickMealItem", mealItemIndex: index })
                   }
+                  style={{ marginTop: space.sm }}
                 >
-                  <Text style={styles.findMatch}>Find a match</Text>
+                  <AppText variant="captionMedium" color={colors.primary}>Find a match</AppText>
                 </Pressable>
               </>
             ) : (
               <>
-                <View style={styles.quantityRow}>
-                  <TextInput
-                    style={styles.quantityInput}
+                <View style={{ marginTop: space.sm, width: 90 }}>
+                  <TextField
                     keyboardType="numeric"
                     value={String(item.quantity)}
                     onChangeText={(value) => updateItem(index, { quantity: Number(value) || 0 })}
@@ -350,52 +350,29 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
                   onPress={() =>
                     navigation.navigate("FoodSearch", { accountId, mode: "pickMealItem", mealItemIndex: index })
                   }
+                  style={{ marginTop: space.sm }}
                 >
-                  <Text style={styles.findMatch}>Find a different match</Text>
+                  <AppText variant="captionMedium" color={colors.primary}>Find a different match</AppText>
                 </Pressable>
                 {preview ? (
-                  <Text style={styles.preview}>
+                  <AppText variant="caption" color={colors.textSecondary} numbers style={{ marginTop: space.sm }}>
                     {preview.kcal ?? "?"} kcal · {preview.proteinG ?? "?"}g protein
-                  </Text>
+                  </AppText>
                 ) : null}
               </>
             )}
-          </View>
+          </Card>
         );
       }}
       ListFooterComponent={
         draft.length > 0 ? (
-          <View style={styles.footer}>
-            {confirmError ? <Text style={styles.error}>{confirmError}</Text> : null}
-            {isConfirming ? <ActivityIndicator /> : null}
-            <View style={styles.button}>
-              <Button title="Log it" onPress={() => void handleConfirm()} disabled={isConfirming} />
-            </View>
+          <View style={{ marginTop: space.lg }}>
+            {confirmError ? <AppText color={colors.error} center style={{ marginBottom: space.sm }}>{confirmError}</AppText> : null}
+            {isConfirming ? <ActivityIndicator color={colors.primary} style={{ marginBottom: space.sm }} /> : null}
+            <Button title="Log it" onPress={() => void handleConfirm()} disabled={isConfirming} />
           </View>
         ) : undefined
       }
     />
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, paddingBottom: 48 },
-  label: { fontWeight: "600", marginBottom: 6 },
-  textArea: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10, minHeight: 60 },
-  button: { marginTop: 12 },
-  orLabel: { textAlign: "center", color: "#888", marginTop: 12 },
-  photoButtons: { flexDirection: "row", gap: 8, marginTop: 8 },
-  photoButton: { flex: 1 },
-  error: { color: "#c00", marginTop: 8, textAlign: "center" },
-  card: { marginTop: 16, padding: 12, borderWidth: 1, borderColor: "#eee", borderRadius: 8 },
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  itemName: { fontSize: 16, fontWeight: "600", flex: 1 },
-  removeLabel: { color: "#c00" },
-  noMatch: { color: "#b8860b", marginTop: 6 },
-  findMatch: { color: "#06c", marginTop: 8 },
-  quantityRow: { marginTop: 8 },
-  quantityInput: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 8, width: 80 },
-  preview: { color: "#444", marginTop: 8 },
-  footer: { marginTop: 8 },
-});

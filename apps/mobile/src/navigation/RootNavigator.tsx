@@ -1,13 +1,14 @@
+import type { MealType } from "@fitness-app/shared";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { Exercise } from "../lib/api";
+import { MainTabs } from "./MainTabs";
 import { BarcodeScanScreen } from "../screens/BarcodeScanScreen";
 import { CreateCustomFoodScreen } from "../screens/CreateCustomFoodScreen";
 import { ExerciseDetailScreen } from "../screens/ExerciseDetailScreen";
 import { ExerciseLibraryScreen } from "../screens/ExerciseLibraryScreen";
 import { FoodSearchScreen } from "../screens/FoodSearchScreen";
 import { GuestLoadingScreen } from "../screens/GuestLoadingScreen";
-import { HomeScreen } from "../screens/HomeScreen";
 import { IngredientQuantityScreen } from "../screens/IngredientQuantityScreen";
 import { LogFoodScreen } from "../screens/LogFoodScreen";
 import { LogMealFromTextScreen } from "../screens/LogMealFromTextScreen";
@@ -16,6 +17,7 @@ import { MyFoodsScreen } from "../screens/MyFoodsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { ProgramsScreen } from "../screens/ProgramsScreen";
 import { WorkoutSessionScreen } from "../screens/WorkoutSessionScreen";
+import { colors, fontFamily } from "../theme";
 
 export interface PickedIngredient {
   foodRef: string;
@@ -27,8 +29,13 @@ export type RootStackParamList = {
   GuestLoading: undefined;
   Onboarding: { accountId: string };
   Home: { accountId: string };
-  FoodSearch: { accountId: string; mode?: "pickIngredient" | "pickMealItem"; mealItemIndex?: number };
-  LogFood: { accountId: string; foodCode: string };
+  FoodSearch: {
+    accountId: string;
+    mode?: "pickIngredient" | "pickMealItem";
+    mealItemIndex?: number;
+    presetMealType?: MealType;
+  };
+  LogFood: { accountId: string; foodCode: string; presetMealType?: MealType };
   MyFoods: { accountId: string };
   CreateCustomFood: { accountId: string; pickedIngredient?: PickedIngredient };
   IngredientQuantity: { accountId: string; foodCode: string };
@@ -49,7 +56,16 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="GuestLoading">
+      <Stack.Navigator
+        initialRouteName="GuestLoading"
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.surface },
+          headerShadowVisible: false,
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontFamily: fontFamily.semiBold, fontSize: 16 },
+          contentStyle: { backgroundColor: colors.bg },
+        }}
+      >
         <Stack.Screen
           name="GuestLoading"
           component={GuestLoadingScreen}
@@ -60,7 +76,7 @@ export function RootNavigator() {
           component={OnboardingScreen}
           options={{ title: "Set up your targets" }}
         />
-        <Stack.Screen name="Home" component={HomeScreen} options={{ title: "Fitness" }} />
+        <Stack.Screen name="Home" component={MainTabs} options={{ headerShown: false }} />
         <Stack.Screen
           name="FoodSearch"
           component={FoodSearchScreen}

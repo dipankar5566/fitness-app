@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius, space, textVariants } from "../theme";
 
 interface ChipSelectProps<T extends string> {
   label: string;
@@ -39,17 +40,18 @@ export function ChipSelect<T extends string>({
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 8 },
-  label: { fontWeight: "600", marginBottom: 6 },
-  row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  container: { marginTop: space.sm },
+  label: { ...textVariants.captionMedium, color: colors.textSecondary, marginBottom: space.sm },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   chip: {
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    borderColor: colors.stroke,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.lg,
   },
-  chipSelected: { backgroundColor: "#111", borderColor: "#111" },
-  chipText: { color: "#111" },
-  chipTextSelected: { color: "#fff" },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { ...textVariants.bodyMedium, color: colors.text },
+  chipTextSelected: { color: colors.textOnPrimary },
 });

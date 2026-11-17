@@ -1,7 +1,8 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import { useEffect, useState } from "react";
-import { Button, FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, View } from "react-native";
+import { AppText, Button, EmptyState, ListRow, Screen, TextField } from "../components/ui";
 import { trackEvent } from "../lib/analytics";
 import { loadGuestSession } from "../lib/auth-storage";
 import { insertCustomFood, insertIngredient } from "../lib/custom-food-repo";
@@ -9,6 +10,7 @@ import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { syncNow } from "../lib/sync-engine";
 import type { PickedIngredient, RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateCustomFood">;
 
@@ -82,56 +84,43 @@ export function CreateCustomFoodScreen({ navigation, route }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Name</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g. Overnight oats"
-        value={name}
-        onChangeText={setName}
-      />
-
-      <Text style={styles.label}>Ingredients</Text>
+    <Screen padded={false}>
       <FlatList
+        contentContainerStyle={{ padding: space.lg }}
         data={ingredients}
         keyExtractor={(item, index) => `${item.foodRef}-${index}`}
-        renderItem={({ item }) => (
-          <View style={styles.ingredientRow}>
-            <Text>{item.name}</Text>
-            <Text style={styles.ingredientGrams}>{item.quantityG}g</Text>
+        ListHeaderComponent={
+          <View style={{ marginBottom: space.lg }}>
+            <TextField label="Name" placeholder="e.g. Overnight oats" value={name} onChangeText={setName} />
+            <AppText variant="h3" style={{ marginTop: space.xl }}>Ingredients</AppText>
           </View>
+        }
+        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.separator }} />}
+        renderItem={({ item }) => (
+          <ListRow
+            title={item.name}
+            trailing={<AppText variant="caption" color={colors.textSecondary} numbers>{item.quantityG}g</AppText>}
+          />
         )}
-        ListEmptyComponent={<Text style={styles.empty}>No ingredients added yet.</Text>}
+        ListEmptyComponent={<EmptyState icon="food-variant" title="No ingredients added yet." />}
+        ListFooterComponent={
+          <View>
+            <Button
+              title="+ Add ingredient"
+              variant="secondary"
+              onPress={() => navigation.navigate("FoodSearch", { accountId, mode: "pickIngredient" })}
+              style={{ marginTop: space.md }}
+            />
+            {error ? <AppText color={colors.error} center style={{ marginTop: space.lg }}>{error}</AppText> : null}
+            <Button
+              title={isSaving ? "Saving..." : "Save recipe"}
+              onPress={() => void handleSave()}
+              loading={isSaving}
+              style={{ marginTop: space.xl }}
+            />
+          </View>
+        }
       />
-      <View style={styles.addButton}>
-        <Button
-          title="+ Add ingredient"
-          onPress={() => navigation.navigate("FoodSearch", { accountId, mode: "pickIngredient" })}
-        />
-      </View>
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.saveButton}>
-        <Button title={isSaving ? "Saving..." : "Save recipe"} onPress={handleSave} disabled={isSaving} />
-      </View>
-    </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
-  label: { fontWeight: "600", marginTop: 16, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10 },
-  ingredientRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  ingredientGrams: { color: "#666" },
-  empty: { color: "#888", marginTop: 8 },
-  addButton: { marginTop: 12 },
-  error: { color: "#c00", textAlign: "center", marginTop: 16 },
-  saveButton: { marginTop: 24 },
-});

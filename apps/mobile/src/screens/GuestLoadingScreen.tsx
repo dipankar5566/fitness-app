@@ -1,17 +1,17 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Button, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
+import { AppText, Button, Screen } from "../components/ui";
 import { identifyGuest, trackEvent } from "../lib/analytics";
 import { createGuestAccount, getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
 import { loadGuestSession, saveGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
-import { getKv, setKv } from "../lib/kv-store";
+import { CACHED_PROFILE_KEY, getKv, setKv } from "../lib/kv-store";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "GuestLoading">;
-
-const CACHED_PROFILE_KEY = "cached_profile";
 
 export function GuestLoadingScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
@@ -77,21 +77,22 @@ export function GuestLoadingScreen({ navigation }: Props) {
 
   if (error) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.error}>{error}</Text>
-        <Button title="Retry" onPress={establishSession} />
-      </View>
+      <Screen edges={["top", "bottom"]}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: space.lg }}>
+          <AppText center color={colors.textSecondary} style={{ marginHorizontal: space.xxl }}>
+            {error}
+          </AppText>
+          <Button title="Retry" onPress={establishSession} style={{ minWidth: 140 }} />
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" />
-    </View>
+    <Screen edges={["top", "bottom"]}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
-  error: { textAlign: "center", marginHorizontal: 24 },
-});

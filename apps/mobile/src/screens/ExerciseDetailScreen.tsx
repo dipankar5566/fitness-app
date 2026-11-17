@@ -1,6 +1,8 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, View } from "react-native";
+import { AppText, Badge, Screen } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, radius, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ExerciseDetail">;
 
@@ -8,35 +10,48 @@ export function ExerciseDetailScreen({ route }: Props) {
   const { exercise } = route.params;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.name}>{exercise.name}</Text>
-      <Text style={styles.meta}>{exercise.equipment ?? "No equipment"}</Text>
-      <Text style={styles.meta}>Primary: {exercise.primaryMuscles.join(", ") || "—"}</Text>
+    <Screen scroll>
+      <AppText variant="h1">{exercise.name}</AppText>
+      <AppText color={colors.textSecondary} style={{ marginTop: space.xs, textTransform: "capitalize" }}>
+        {exercise.equipment ?? "No equipment"}
+      </AppText>
+
+      <AppText variant="captionMedium" color={colors.textSecondary} style={{ marginTop: space.lg }}>Primary muscles</AppText>
+      <Chips values={exercise.primaryMuscles} />
       {exercise.secondaryMuscles.length > 0 ? (
-        <Text style={styles.meta}>Secondary: {exercise.secondaryMuscles.join(", ")}</Text>
+        <>
+          <AppText variant="captionMedium" color={colors.textSecondary} style={{ marginTop: space.md }}>Secondary muscles</AppText>
+          <Chips values={exercise.secondaryMuscles} />
+        </>
       ) : null}
 
       {exercise.imageUrls[0] ? (
-        <Image source={{ uri: exercise.imageUrls[0] }} style={styles.image} resizeMode="contain" />
+        <Image
+          source={{ uri: exercise.imageUrls[0] }}
+          style={{ width: "100%", height: 220, marginTop: space.lg, borderRadius: radius.md, backgroundColor: colors.surfaceAlt }}
+          resizeMode="contain"
+        />
       ) : null}
 
-      <View style={styles.instructions}>
-        {exercise.instructions.map((step, index) => (
-          <Text key={index} style={styles.step}>
-            {index + 1}. {step}
-          </Text>
-        ))}
-      </View>
-    </ScrollView>
+      <AppText variant="h2" style={{ marginTop: space.xl, marginBottom: space.sm }}>Instructions</AppText>
+      {exercise.instructions.map((step, index) => (
+        <AppText key={index} style={{ marginTop: space.sm, lineHeight: 21 }}>
+          {index + 1}. {step}
+        </AppText>
+      ))}
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16 },
-  name: { fontSize: 20, fontWeight: "600" },
-  meta: { color: "#666", marginTop: 4, textTransform: "capitalize" },
-  image: { width: "100%", height: 220, marginTop: 16, backgroundColor: "#f2f2f2" },
-  instructions: { marginTop: 16, gap: 8 },
-  step: { fontSize: 15, lineHeight: 21 },
-});
+function Chips({ values }: { values: string[] }) {
+  if (values.length === 0) {
+    return <AppText color={colors.textTertiary}>—</AppText>;
+  }
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginTop: space.xs }}>
+      {values.map((value) => (
+        <Badge key={value} label={value} />
+      ))}
+    </View>
+  );
+}

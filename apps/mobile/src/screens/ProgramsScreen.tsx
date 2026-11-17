@@ -1,12 +1,14 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Button, FlatList, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, View } from "react-native";
+import { AppText, Button, Card } from "../components/ui";
 import { trackEvent } from "../lib/analytics";
 import { listPrograms, type Program } from "../lib/api";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { FOLLOWED_PROGRAM_ID_KEY, FOLLOWED_PROGRAM_KEY, getKv, setKv } from "../lib/kv-store";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Programs">;
 
@@ -53,61 +55,40 @@ export function ProgramsScreen({ navigation, route }: Props) {
 
   return (
     <FlatList
-      style={styles.container}
-      contentContainerStyle={styles.content}
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
       data={programs}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
-        <View style={styles.header}>
-          <Text style={styles.title}>Pick a program to follow</Text>
-          {isLoading ? <ActivityIndicator style={styles.spinner} /> : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <View style={styles.button}>
-            <Button title="Skip for now" onPress={handleSkip} color="#888" />
-          </View>
+        <View style={{ marginBottom: space.sm }}>
+          <AppText variant="h1">Pick a program to follow</AppText>
+          {isLoading ? <ActivityIndicator style={{ marginTop: space.md }} color={colors.primary} /> : null}
+          {error ? <AppText color={colors.error} center style={{ marginTop: space.md }}>{error}</AppText> : null}
+          <Button title="Skip for now" variant="ghost" onPress={handleSkip} style={{ marginTop: space.md }} />
         </View>
       }
       renderItem={({ item }) => {
         const isFollowed = item.id === followedId;
         return (
-          <View style={styles.card}>
-            <Text style={styles.programName}>{item.name}</Text>
-            {item.description ? <Text style={styles.programDescription}>{item.description}</Text> : null}
+          <Card style={{ marginTop: space.lg }}>
+            <AppText variant="h3">{item.name}</AppText>
+            {item.description ? (
+              <AppText color={colors.textSecondary} style={{ marginTop: space.xxs }}>{item.description}</AppText>
+            ) : null}
             {item.days.map((day) => (
-              <Text key={day.id} style={styles.dayLine}>
+              <AppText key={day.id} variant="caption" color={colors.textSecondary} style={{ marginTop: space.sm }}>
                 {day.name}: {day.exercises.map((e) => e.exerciseName).join(", ")}
-              </Text>
+              </AppText>
             ))}
-            <View style={styles.button}>
-              <Button
-                title={isFollowed ? "Following" : "Follow this program"}
-                onPress={() => void handleFollow(item)}
-                disabled={isFollowed}
-              />
-            </View>
-          </View>
+            <Button
+              title={isFollowed ? "Following" : "Follow this program"}
+              onPress={() => void handleFollow(item)}
+              disabled={isFollowed}
+              style={{ marginTop: space.md }}
+            />
+          </Card>
         );
       }}
     />
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16 },
-  header: { marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: "600" },
-  spinner: { marginTop: 12 },
-  error: { color: "#c00", marginTop: 12, textAlign: "center" },
-  button: { marginTop: 12 },
-  card: {
-    marginTop: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 8,
-  },
-  programName: { fontSize: 16, fontWeight: "600" },
-  programDescription: { color: "#666", marginTop: 4 },
-  dayLine: { color: "#444", marginTop: 6, fontSize: 13 },
-});

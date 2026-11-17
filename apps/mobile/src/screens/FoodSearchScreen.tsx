@@ -1,21 +1,15 @@
 import { isAllowed, type DietClass, type DietType } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, View } from "react-native";
+import { AppText, Badge, EmptyState, ListRow, Screen, TextField } from "../components/ui";
 import { isNetworkError, searchFoods } from "../lib/api";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { listRecentFoods } from "../lib/food-cache-repo";
 import { getKv } from "../lib/kv-store";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FoodSearch">;
 
@@ -25,6 +19,10 @@ interface DisplayResult {
   foodType: string;
   dietClass: DietClass | null;
   jainOk: boolean | null;
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 const DIET_LABELS: Record<DietType, string> = {
@@ -99,9 +97,9 @@ export function FoodSearchScreen({ navigation, route }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        style={styles.input}
+    <Screen padded={false}>
+      <TextField
+        style={{ margin: space.lg, marginBottom: space.sm }}
         placeholder="Search for a food, e.g. idli"
         value={query}
         onChangeText={setQuery}
@@ -109,15 +107,27 @@ export function FoodSearchScreen({ navigation, route }: Props) {
         returnKeyType="search"
         autoFocus
       />
-      {dietType ? <Text style={styles.dietHeader}>Showing {DIET_LABELS[dietType]}-friendly foods</Text> : null}
-      {isSearching ? <ActivityIndicator style={styles.spinner} /> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {dietType ? (
+        <AppText variant="caption" color={colors.textSecondary} style={{ marginHorizontal: space.lg }}>
+          Showing {DIET_LABELS[dietType]}-friendly foods
+        </AppText>
+      ) : null}
+      {isSearching ? <ActivityIndicator style={{ marginTop: space.md }} color={colors.primary} /> : null}
+      {error ? (
+        <AppText color={colors.warning} center style={{ marginTop: space.md, marginHorizontal: space.lg }}>
+          {error}
+        </AppText>
+      ) : null}
       <FlatList
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xl }}
         data={results}
         keyExtractor={(item) => item.code}
+        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.separator }} />}
         renderItem={({ item }) => (
-          <Pressable
-            style={styles.resultRow}
+          <ListRow
+            title={item.name}
+            subtitle={capitalize(item.foodType)}
+            trailing={item.dietClass === null ? <Badge label="unverified" tone="warning" /> : undefined}
             onPress={() => {
               if (route.params.mode === "pickIngredient") {
                 navigation.navigate("IngredientQuantity", {
@@ -133,41 +143,18 @@ export function FoodSearchScreen({ navigation, route }: Props) {
                 navigation.navigate("LogFood", {
                   accountId: route.params.accountId,
                   foodCode: item.code,
+                  presetMealType: route.params.presetMealType,
                 });
               }
             }}
-          >
-            <View>
-              <Text style={styles.resultName}>{item.name}</Text>
-              <Text style={styles.resultType}>{item.foodType}</Text>
-            </View>
-            {item.dietClass === null ? <Text style={styles.unverified}>diet unverified</Text> : null}
-          </Pressable>
+          />
         )}
         ListEmptyComponent={
-          hasSearched && !isSearching ? <Text style={styles.empty}>No results.</Text> : undefined
+          hasSearched && !isSearching ? (
+            <EmptyState icon="magnify" title="No results." style={{ marginTop: space.xxl }} />
+          ) : undefined
         }
       />
-    </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10 },
-  dietHeader: { color: "#666", marginTop: 8, fontSize: 12 },
-  spinner: { marginTop: 12 },
-  error: { color: "#c00", marginTop: 12, textAlign: "center" },
-  resultRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  resultName: { fontSize: 16 },
-  resultType: { color: "#888", fontSize: 12, textTransform: "capitalize" },
-  unverified: { color: "#b8860b", fontSize: 11 },
-  empty: { textAlign: "center", marginTop: 24, color: "#888" },
-});

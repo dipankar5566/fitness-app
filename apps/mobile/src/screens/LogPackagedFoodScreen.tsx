@@ -2,7 +2,8 @@ import type { MealType } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Button, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
+import { AppText, Button, Card, Screen, TextField } from "../components/ui";
 import { ChipSelect } from "../components/ChipSelect";
 import { trackEvent } from "../lib/analytics";
 import { lookupPackagedFood, type PackagedFoodDetail } from "../lib/api";
@@ -12,6 +13,7 @@ import { API_URL } from "../lib/env";
 import { insert } from "../lib/food-log-repo";
 import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
+import { colors, space } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LogPackagedFood">;
 
@@ -118,76 +120,69 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
 
   if (loadError) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{loadError}</Text>
-      </View>
+      <Screen>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <AppText color={colors.error} center>{loadError}</AppText>
+        </View>
+      </Screen>
     );
   }
 
   if (notFound) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.title}>No product found for this barcode.</Text>
-        <Text style={styles.subtitle}>You can add it manually as a custom food instead.</Text>
-        <View style={styles.submitButton}>
-          <Button title="Add it manually" onPress={() => navigation.navigate("CreateCustomFood", { accountId })} />
+      <Screen>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: space.sm }}>
+          <AppText variant="h2" center>No product found for this barcode.</AppText>
+          <AppText color={colors.textSecondary} center>You can add it manually as a custom food instead.</AppText>
+          <Button
+            title="Add it manually"
+            onPress={() => navigation.navigate("CreateCustomFood", { accountId })}
+            style={{ marginTop: space.lg, minWidth: 180 }}
+          />
         </View>
-      </View>
+      </Screen>
     );
   }
 
   if (!product) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
+      <Screen>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>{product.name}</Text>
-      {product.brand ? <Text style={styles.subtitle}>{product.brand}</Text> : null}
-      <Text style={styles.subtitle}>
+    <Screen scroll>
+      <AppText variant="h1">{product.name}</AppText>
+      {product.brand ? <AppText color={colors.textSecondary} style={{ marginTop: space.xxs }}>{product.brand}</AppText> : null}
+      <AppText variant="body" color={colors.textSecondary} style={{ marginTop: space.xxs, marginBottom: space.lg }}>
         Per 100g: {product.nutrientsPer100g.energy_kcal ?? "?"} kcal · {product.nutrientsPer100g.protein_g ?? "?"}g protein
-      </Text>
+      </AppText>
 
-      <Text style={styles.label}>Quantity (grams)</Text>
-      <TextInput style={styles.input} keyboardType="numeric" value={quantity} onChangeText={setQuantity} />
+      <TextField label="Quantity (grams)" keyboardType="numeric" value={quantity} onChangeText={setQuantity} />
 
       <ChipSelect label="Meal" options={MEAL_TYPES} value={mealType} onChange={setMealType} formatOption={capitalize} />
 
       {preview ? (
-        <View style={styles.preview}>
-          <Text style={styles.previewTitle}>This entry</Text>
-          <Text>{preview.kcal ?? "?"} kcal</Text>
-          <Text>
+        <Card style={{ marginTop: space.xl }}>
+          <AppText variant="captionMedium" color={colors.textSecondary}>This entry</AppText>
+          <AppText variant="h1" numbers style={{ marginTop: space.xxs }}>{preview.kcal ?? "?"} kcal</AppText>
+          <AppText variant="body" color={colors.textSecondary} numbers style={{ marginTop: space.xxs }}>
             {preview.proteinG ?? "?"}g protein · {preview.carbG ?? "?"}g carb · {preview.fatG ?? "?"}g fat
-          </Text>
-        </View>
+          </AppText>
+        </Card>
       ) : null}
 
-      {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
-      <View style={styles.submitButton}>
-        <Button
-          title={isSubmitting ? "Saving..." : "Log it"}
-          onPress={() => void handleSubmit()}
-          disabled={isSubmitting}
-        />
-      </View>
-    </ScrollView>
+      {submitError ? <AppText color={colors.error} center style={{ marginTop: space.lg }}>{submitError}</AppText> : null}
+      <Button
+        title={isSubmitting ? "Saving..." : "Log it"}
+        onPress={() => void handleSubmit()}
+        loading={isSubmitting}
+        style={{ marginTop: space.xxl }}
+      />
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { padding: 24, paddingBottom: 48 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 8 },
-  title: { fontSize: 20, fontWeight: "700" },
-  subtitle: { color: "#666", marginTop: 4, marginBottom: 16, textAlign: "center" },
-  label: { fontWeight: "600", marginTop: 16, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 10 },
-  preview: { marginTop: 24, padding: 12, backgroundColor: "#f5f5f5", borderRadius: 8, gap: 4 },
-  previewTitle: { fontWeight: "600" },
-  error: { color: "#c00", textAlign: "center", marginTop: 16 },
-  submitButton: { marginTop: 24 },
-});

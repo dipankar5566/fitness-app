@@ -7,6 +7,11 @@ import type { SqlDb } from "./sql-db";
 export const FOLLOWED_PROGRAM_ID_KEY = "followed_program_id";
 export const FOLLOWED_PROGRAM_KEY = "followed_program";
 
+// GuestLoadingScreen/HomeScreen write these; TabScreens.tsx's MeTabScreen also reads them (the
+// same offline-fallback cache, not a new one) - moved here once a second screen needed them.
+export const CACHED_PROFILE_KEY = "cached_profile";
+export const CACHED_GOAL_KEY = "cached_goal";
+
 export async function getKv(db: SqlDb, key: string): Promise<string | null> {
   const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key]);
   return row?.value ?? null;

@@ -1,29 +1,51 @@
+import {
+  calorieRingProgress,
+  groupFoodLogByMeal,
+  kcalRemaining,
+  sumKcal,
+  type MealDisplayType,
+} from "@fitness-app/shared";
 import { useFocusEffect } from "@react-navigation/native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Button, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MacroBar, ProgressRing } from "../components/Charts";
+import { AppText, Card, EmptyState, SectionHeader } from "../components/ui";
 import { getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { listByLocalDay, softDelete, type LocalFoodLogRow } from "../lib/food-log-repo";
-import { getKv, setKv } from "../lib/kv-store";
+import { CACHED_GOAL_KEY, getKv, setKv } from "../lib/kv-store";
 import type { SqlDb } from "../lib/sql-db";
 import { syncNow } from "../lib/sync-engine";
-import type { RootStackParamList } from "../navigation/RootNavigator";
+import { getActiveSession, listSetsForSession } from "../lib/workout-repo";
+import type { MainTabScreenProps } from "../navigation/MainTabs";
+import { colors, radius, space } from "../theme";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Home">;
-
-const CACHED_GOAL_KEY = "cached_goal";
+type Goal = GetProfileResponse["goal"];
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function HomeScreen({ navigation, route }: Props) {
+const MEAL_LABELS: Record<MealDisplayType, string> = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  snack: "Snacks",
+  dinner: "Dinner",
+};
+
+function sumMacro(entries: LocalFoodLogRow[], key: "proteinG" | "fatG" | "carbG"): number {
+  return entries.reduce((sum, entry) => sum + (entry.macros?.[key] ?? 0), 0);
+}
+
+export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const { accountId } = route.params;
-  const [goal, setGoal] = useState<GetProfileResponse["goal"] | null>(null);
+  const [goal, setGoal] = useState<Goal>(null);
   const [entries, setEntries] = useState<LocalFoodLogRow[]>([]);
+  const [activeWorkoutSets, setActiveWorkoutSets] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadEntries = useCallback(async (db: SqlDb) => {
@@ -43,6 +65,9 @@ export function HomeScreen({ navigation, route }: Props) {
     await loadEntries(db);
     void syncNow(db, API_URL, session.accessToken).then(() => loadEntries(db));
 
+    const activeSession = await getActiveSession(db, accountId);
+    setActiveWorkoutSets(activeSession ? (await listSetsForSession(db, activeSession.id)).length : null);
+
     try {
       const { goal: activeGoal } = await getProfile(API_URL, session.accessToken);
       setGoal(activeGoal);
@@ -52,11 +77,11 @@ export function HomeScreen({ navigation, route }: Props) {
         throw err;
       }
       const cached = await getKv(db, CACHED_GOAL_KEY);
-      setGoal(cached ? (JSON.parse(cached) as GetProfileResponse["goal"]) : null);
+      setGoal(cached ? (JSON.parse(cached) as Goal) : null);
     }
 
     setIsLoading(false);
-  }, [loadEntries]);
+  }, [accountId, loadEntries]);
 
   useFocusEffect(
     useCallback(() => {
@@ -65,104 +90,188 @@ export function HomeScreen({ navigation, route }: Props) {
   );
 
   const handleDelete = useCallback(
-    async (id: string) => {
-      const session = await loadGuestSession();
-      if (!session) {
-        return;
-      }
-      const db = await getDatabase();
-      await softDelete(db, id, new Date().toISOString());
-      await loadEntries(db);
-      void syncNow(db, API_URL, session.accessToken);
+    (entry: LocalFoodLogRow) => {
+      Alert.alert("Delete entry?", undefined, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              const session = await loadGuestSession();
+              if (!session) return;
+              const db = await getDatabase();
+              await softDelete(db, entry.id, new Date().toISOString());
+              await loadEntries(db);
+              void syncNow(db, API_URL, session.accessToken);
+            })();
+          },
+        },
+      ]);
     },
     [loadEntries],
   );
 
-  const totalKcal = entries.reduce((sum, entry) => sum + (entry.macros?.kcal ?? 0), 0);
+  const totalKcal = sumKcal(entries);
+  const targetKcal = goal ? Number(goal.target_kcal) : 0;
+  const remaining = kcalRemaining(totalKcal, targetKcal);
+  const progress = calorieRingProgress(totalKcal, targetKcal);
+  const mealGroups = groupFoodLogByMeal(entries);
 
   return (
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
     <FlatList
-      style={styles.container}
+      style={styles.list}
       contentContainerStyle={styles.content}
-      data={entries}
-      keyExtractor={(item) => item.id}
+      data={mealGroups}
+      keyExtractor={(group) => group.mealType}
       ListHeaderComponent={
-        <View style={styles.header}>
-          <Text style={styles.id}>{accountId}</Text>
+        <View>
+          <AppText variant="h1">Today</AppText>
+          <AppText variant="body" color={colors.textSecondary} style={{ marginBottom: space.lg }}>
+            {new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+          </AppText>
+
           {goal ? (
-            <View style={styles.targets}>
-              <Text style={styles.targetsTitle}>Daily target: {goal.target_kcal} kcal</Text>
-              <Text style={styles.targetsSubtitle}>
-                {goal.target_protein_g}g protein · {goal.target_carb_g}g carb · {goal.target_fat_g}g fat
-              </Text>
-              <Text style={styles.loggedSoFar}>Logged so far: {Math.round(totalKcal)} kcal</Text>
-            </View>
-          ) : (
-            <ActivityIndicator />
-          )}
-          <View style={styles.logButton}>
-            <Button title="Log food" onPress={() => navigation.navigate("FoodSearch", { accountId })} />
-          </View>
-          <View style={styles.logButton}>
-            <Button title="Log meal (AI)" onPress={() => navigation.navigate("LogMealFromText", { accountId })} />
-          </View>
-          <View style={styles.logButton}>
-            <Button title="Scan barcode" onPress={() => navigation.navigate("BarcodeScan", { accountId })} />
-          </View>
-          <View style={styles.logButton}>
-            <Button title="My foods" onPress={() => navigation.navigate("MyFoods", { accountId })} />
-          </View>
-          <View style={styles.logButton}>
-            <Button title="Exercises" onPress={() => navigation.navigate("ExerciseLibrary", { accountId })} />
-          </View>
-          <View style={styles.logButton}>
-            <Button title="Workout" onPress={() => navigation.navigate("WorkoutSession", { accountId })} />
-          </View>
-          <View style={styles.logButton}>
-            <Button title="Programs" onPress={() => navigation.navigate("Programs", { accountId })} />
-          </View>
-          {!isLoading && entries.length === 0 ? (
-            <Text style={styles.empty}>Nothing logged today yet.</Text>
+            <Card style={styles.heroCard}>
+              <ProgressRing progress={progress} color={remaining < 0 ? colors.error : colors.primary}>
+                <AppText variant="h1" numbers>{Math.abs(remaining)}</AppText>
+                <AppText variant="caption" color={colors.textSecondary}>
+                  kcal {remaining < 0 ? "over" : "left"}
+                </AppText>
+              </ProgressRing>
+              <AppText variant="caption" color={colors.textSecondary} center numbers style={{ marginTop: space.sm }}>
+                {Math.round(totalKcal)} / {Math.round(targetKcal)} kcal eaten
+              </AppText>
+
+              <View style={styles.macroBars}>
+                <MacroBar label="Protein" grams={sumMacro(entries, "proteinG")} targetGrams={Number(goal.target_protein_g)} color={colors.protein} />
+                <MacroBar label="Carbs" grams={sumMacro(entries, "carbG")} targetGrams={Number(goal.target_carb_g)} color={colors.carb} />
+                <MacroBar label="Fat" grams={sumMacro(entries, "fatG")} targetGrams={Number(goal.target_fat_g)} color={colors.fat} />
+              </View>
+            </Card>
           ) : null}
-        </View>
-      }
-      renderItem={({ item }) => (
-        <View style={styles.entryRow}>
-          <View style={styles.entryInfo}>
-            <Text style={styles.entryMeal}>{item.mealType}</Text>
-            <Text>
-              {item.quantity} {item.unit} · {item.macros?.kcal ?? "?"} kcal
-            </Text>
+
+          <View style={styles.quickActions}>
+            <QuickAction icon="magnify" label="Search" onPress={() => navigation.navigate("FoodSearch", { accountId })} />
+            <QuickAction icon="chat-processing-outline" label="AI / Photo" onPress={() => navigation.navigate("LogMealFromText", { accountId })} />
+            <QuickAction icon="barcode-scan" label="Scan" onPress={() => navigation.navigate("BarcodeScan", { accountId })} />
           </View>
-          <Pressable onPress={() => handleDelete(item.id)}>
-            <Text style={styles.deleteLabel}>Delete</Text>
+
+          <Pressable
+            onPress={() => navigation.navigate("WorkoutSession", { accountId })}
+            style={({ pressed }) => [styles.workoutCard, pressed && styles.workoutCardPressed]}
+          >
+            <MaterialCommunityIcons name="dumbbell" size={22} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <AppText variant="bodyMedium">
+                {activeWorkoutSets === null ? "No workout logged today" : `Workout in progress`}
+              </AppText>
+              {activeWorkoutSets !== null ? (
+                <AppText variant="caption" color={colors.textSecondary}>{activeWorkoutSets} set{activeWorkoutSets === 1 ? "" : "s"} logged</AppText>
+              ) : null}
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} />
           </Pressable>
         </View>
+      }
+      renderItem={({ item: group }) => (
+        <View style={styles.mealSection}>
+          <SectionHeader
+            title={`${MEAL_LABELS[group.mealType]}${group.entries.length > 0 ? ` · ${Math.round(group.kcalSubtotal)} kcal` : ""}`}
+            action={{ label: "+ Add", onPress: () => navigation.navigate("FoodSearch", { accountId, presetMealType: group.mealType }) }}
+          />
+          {group.entries.length === 0 ? (
+            <AppText variant="caption" color={colors.textTertiary}>Nothing logged yet.</AppText>
+          ) : (
+            group.entries.map((entry) => (
+              <Pressable
+                key={entry.id}
+                onLongPress={() => handleDelete(entry)}
+                style={({ pressed }) => [styles.entryRow, pressed && styles.entryRowPressed]}
+              >
+                <View style={{ flex: 1 }}>
+                  <AppText variant="bodyMedium" numberOfLines={1}>
+                    {entry.quantity} {entry.unit}
+                  </AppText>
+                  {entry.isEstimate ? <AppText variant="micro" color={colors.warning}>estimate</AppText> : null}
+                </View>
+                <AppText variant="bodyMedium" numbers color={colors.textSecondary}>
+                  {entry.macros?.kcal ?? "?"} kcal
+                </AppText>
+              </Pressable>
+            ))
+          )}
+        </View>
       )}
+      ListFooterComponent={
+        !isLoading && entries.length === 0 ? (
+          <EmptyState icon="food-apple-outline" title="Nothing logged today yet." subtitle="Log your first meal above." />
+        ) : (
+          <AppText variant="caption" color={colors.textTertiary} center style={{ marginTop: space.lg }}>
+            Long-press an entry to delete it.
+          </AppText>
+        )
+      }
     />
+    </SafeAreaView>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.quickAction, pressed && styles.quickActionPressed]}>
+      <MaterialCommunityIcons name={icon} size={22} color={colors.primary} />
+      <AppText variant="captionMedium" style={{ marginTop: space.xs }}>{label}</AppText>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16 },
-  header: { alignItems: "center", gap: 8, marginBottom: 16 },
-  id: { color: "#666", fontSize: 12 },
-  targets: { marginTop: 16, alignItems: "center", gap: 4 },
-  targetsTitle: { fontWeight: "600" },
-  targetsSubtitle: { color: "#444" },
-  loggedSoFar: { color: "#666", marginTop: 4 },
-  logButton: { marginTop: 16 },
-  empty: { color: "#888", marginTop: 16 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  list: { flex: 1 },
+  content: { padding: space.lg, paddingBottom: space.xxxl },
+  heroCard: { alignItems: "center", marginTop: space.sm },
+  macroBars: { width: "100%", gap: space.sm, marginTop: space.lg },
+  quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
+  quickAction: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: space.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.stroke,
+  },
+  quickActionPressed: { opacity: 0.7 },
+  workoutCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    marginTop: space.lg,
+    padding: space.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.stroke,
+  },
+  workoutCardPressed: { opacity: 0.7 },
+  mealSection: { marginTop: space.xxl },
   entryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: colors.separator,
   },
-  entryInfo: { gap: 2 },
-  entryMeal: { fontWeight: "600", textTransform: "capitalize" },
-  deleteLabel: { color: "#c00" },
+  entryRowPressed: { opacity: 0.6 },
 });
