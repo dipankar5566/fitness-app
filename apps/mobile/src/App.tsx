@@ -5,6 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { loadGuestSession } from "./lib/auth-storage";
 import { getDatabase } from "./lib/db";
 import { API_URL } from "./lib/env";
+import { applyReminderSchedule, loadReminderSettings } from "./lib/reminders";
 import { syncNow } from "./lib/sync-engine";
 import { RootNavigator } from "./navigation/RootNavigator";
 import { useInterFonts } from "./theme";
@@ -22,7 +23,12 @@ export default function App() {
   const appState = useRef<AppStateStatus>(AppState.currentState as AppStateStatus);
 
   useEffect(() => {
-    void getDatabase().then(() => setIsDbReady(true));
+    void getDatabase().then(async (db) => {
+      setIsDbReady(true);
+      // Re-applies the saved schedule on every launch - the OS doesn't persist scheduled
+      // notifications across an app reinstall/data-clear/device restore, only kv does.
+      await applyReminderSchedule(await loadReminderSettings(db));
+    });
   }, []);
 
   useEffect(() => {

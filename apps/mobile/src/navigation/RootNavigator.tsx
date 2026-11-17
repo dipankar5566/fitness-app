@@ -17,6 +17,7 @@ import { LogPackagedFoodScreen } from "../screens/LogPackagedFoodScreen";
 import { MyFoodsScreen } from "../screens/MyFoodsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { ProgramsScreen } from "../screens/ProgramsScreen";
+import { RemindersScreen } from "../screens/RemindersScreen";
 import { WorkoutSessionScreen } from "../screens/WorkoutSessionScreen";
 import { colors, fontFamily } from "../theme";
 
@@ -51,6 +52,7 @@ export type RootStackParamList = {
   BarcodeScan: { accountId: string };
   LogPackagedFood: { accountId: string; barcode: string };
   CoachChat: { accountId: string };
+  Reminders: { accountId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -128,6 +130,7 @@ export function RootNavigator() {
           options={{ title: "Log product" }}
         />
         <Stack.Screen name="CoachChat" component={CoachChatScreen} options={{ title: "Coach" }} />
+        <Stack.Screen name="Reminders" component={RemindersScreen} options={{ title: "Reminders" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

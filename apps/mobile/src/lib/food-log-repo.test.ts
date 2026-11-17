@@ -4,6 +4,7 @@ import {
   getDirty,
   insert,
   listByLocalDay,
+  listLoggedLocalDays,
   markClean,
   softDelete,
   type LocalFoodLogRow,
@@ -87,6 +88,29 @@ describe("food-log-repo", () => {
 
     expect(await listByLocalDay(db, "account-1", "2026-11-14")).toEqual([]);
     expect((await getDirty(db))[0].isDeleted).toBe(true);
+  });
+
+  describe("listLoggedLocalDays", () => {
+    it("returns each distinct logged day, excluding deleted entries and other accounts", async () => {
+      await insert(db, ROW); // account-1, 2026-11-14
+      await insert(db, { ...ROW, id: "same-day-2", loggedAt: "2026-11-14T18:00:00.000Z" }); // same day again
+      await insert(db, { ...ROW, id: "other-day", loggedAt: "2026-11-15T08:00:00.000Z" });
+      await insert(db, { ...ROW, id: "deleted-day", loggedAt: "2026-11-10T08:00:00.000Z", isDeleted: true });
+      await insert(db, { ...ROW, id: "other-account", accountId: "account-2", loggedAt: "2026-11-16T08:00:00.000Z" });
+
+      const days = await listLoggedLocalDays(db, "account-1", "2026-01-01");
+
+      expect(new Set(days)).toEqual(new Set(["2026-11-14", "2026-11-15"]));
+    });
+
+    it("excludes days before sinceDate", async () => {
+      await insert(db, ROW); // 2026-11-14
+      await insert(db, { ...ROW, id: "too-old", loggedAt: "2025-01-01T08:00:00.000Z" });
+
+      const days = await listLoggedLocalDays(db, "account-1", "2026-01-01");
+
+      expect(days).toEqual(["2026-11-14"]);
+    });
   });
 
   describe("applyRemote", () => {

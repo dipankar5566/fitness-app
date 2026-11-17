@@ -199,6 +199,8 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
         <Divider />
         <ListRow icon="calendar-check-outline" title="Programs" onPress={() => navigation.navigate("Programs", { accountId })} />
         <Divider />
+        <ListRow icon="bell-outline" title="Reminders" onPress={() => navigation.navigate("Reminders", { accountId })} />
+        <Divider />
         <ListRow
           icon="robot-happy-outline"
           title="Coach"

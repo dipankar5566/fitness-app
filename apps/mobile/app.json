@@ -24,7 +24,8 @@
     },
     "plugins": [
       "@sentry/react-native/expo",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ]
   }
 }

@@ -91,6 +91,19 @@ export async function listByLocalDay(db: SqlDb, accountId: string, date: string)
   return rows.map(fromSqlRow);
 }
 
+/** Distinct local calendar days (logged_at date prefix, same convention as listByLocalDay) with
+ * at least one non-deleted entry on/after `sinceDate` - feeds the streak calculation
+ * (packages/shared's computeLoggingStreak), which only needs "which days were logged", not the
+ * entries themselves. Unordered; the caller doesn't need these in any particular order. */
+export async function listLoggedLocalDays(db: SqlDb, accountId: string, sinceDate: string): Promise<string[]> {
+  const rows = await db.getAllAsync<{ day: string }>(
+    `SELECT DISTINCT substr(logged_at, 1, 10) AS day FROM food_log
+     WHERE account_id = ? AND is_deleted = 0 AND substr(logged_at, 1, 10) >= ?`,
+    [accountId, sinceDate],
+  );
+  return rows.map((row) => row.day);
+}
+
 export async function softDelete(db: SqlDb, id: string, updatedAt: string): Promise<void> {
   await db.runAsync(
     "UPDATE food_log SET is_deleted = 1, updated_at = ?, is_dirty = 1 WHERE id = ?",

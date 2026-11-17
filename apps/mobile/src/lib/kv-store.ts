@@ -12,6 +12,10 @@ export const FOLLOWED_PROGRAM_KEY = "followed_program";
 export const CACHED_PROFILE_KEY = "cached_profile";
 export const CACHED_GOAL_KEY = "cached_goal";
 
+// RemindersScreen writes this; reminders.ts reads it to reschedule on app start (App.tsx) and
+// TabScreens.tsx's MeTabScreen reads it to show each reminder's current enabled/time state.
+export const REMINDER_SETTINGS_KEY = "reminder_settings";
+
 export async function getKv(db: SqlDb, key: string): Promise<string | null> {
   const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key]);
   return row?.value ?? null;

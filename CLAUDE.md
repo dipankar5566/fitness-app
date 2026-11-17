@@ -307,8 +307,38 @@ reply itself couldn't be exercised in this pass since the running dev server had
 `OPENAI_API_KEY` configured, a local environment gap rather than a client bug; the server-side
 reply path was already verified end-to-end when `CoachService` was built, see above).
 
-Still to do for M5: Health Connect read (steps/exercise/weight) + opt-in write; meal/workout
-reminders + logging streak.
+Logging streak + reminders are done. `packages/shared/src/streak.ts`'s `computeLoggingStreak`
+(pure, unit-tested per the formula rule - relationship tests, not hard-coded numbers: increments
+day over day, one gap bridged, a second same-week gap resets, a gap in a later week bridged again
+independently, two consecutive misses reset, empty history, an unlogged today doesn't break an
+otherwise-live streak) walks the account's local `food_log` dates backward, same "derive it from
+what's already synced locally, no new endpoint" pattern as `workout-prs.ts`'s PR tracking -
+`app.streak` stays unused since a streak is fully derivable and doesn't have the four-column
+syncable shape. A single missed day is forgiven once per ISO week (Mon-Sun); two consecutive
+misses, or a second miss in the same week, resets it. `apps/mobile`'s `food-log-repo.ts` gained
+`listLoggedLocalDays` to feed it; `HomeScreen` shows a flame-icon streak chip plus a "freeze used
+this week" hint when relevant.
+
+Reminders are local-notifications-only (`expo-notifications`, SDK 58, its config plugin added to
+`app.json`) - `app.reminder` stays unused for the same per-device/no-sync-shape reason `app.streak`
+does. `apps/mobile/src/lib/reminders.ts` holds default reminders (breakfast 9:00, lunch 13:30,
+dinner 20:30, workout 18:00, all starting disabled), settings persisted in `kv`
+(`REMINDER_SETTINGS_KEY`, added to `kv-store.ts`) as a validated JSON array (malformed/missing
+input falls back to the defaults rather than crashing), and `applyReminderSchedule` (cancel-then-
+reschedule-all each time, keyed by each reminder's own stable id as the notification identifier).
+Permission is requested lazily - only when the user actually turns a reminder on, from the new
+`RemindersScreen` (reached via a Me-tab row) - not at app start. `App.tsx` reapplies the saved
+schedule on every launch, since the OS doesn't persist scheduled notifications across a
+reinstall/restore, only `kv` does. Verified: unit tests for the pure settings logic plus the
+scheduling/permission wrapper (`expo-notifications` mocked the same way `analytics.test.ts` mocks
+`@sentry/react-native`, since the real native module can't load outside a React Native runtime -
+needed `vi.hoisted` here, unlike `analytics.test.ts`, because this test file imports the module
+under test statically rather than via a deferred `import()`), plus a new `listLoggedLocalDays`
+case in `food-log-repo.test.ts`. The exit criterion's actual on-device firing/streak-increment
+check needs the native Android build (CLAUDE.md's hoisted-layout workaround) and wasn't run as
+part of this pass - flagged as outstanding, not claimed as done.
+
+Still to do for M5: Health Connect read (steps/exercise/weight) + opt-in write.
 
 **`apps/mobile` UI/UX redesign (cross-cutting, not a roadmap milestone).** The app was functional
 but every screen was an unstyled stack of default RN `<Button>`s with no theme or navigation

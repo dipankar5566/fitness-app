@@ -1,5 +1,6 @@
 import {
   calorieRingProgress,
+  computeLoggingStreak,
   groupFoodLogByMeal,
   kcalRemaining,
   sumKcal,
@@ -16,13 +17,17 @@ import { getProfile, isNetworkError, type GetProfileResponse } from "../lib/api"
 import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
-import { listByLocalDay, softDelete, type LocalFoodLogRow } from "../lib/food-log-repo";
+import { listByLocalDay, listLoggedLocalDays, softDelete, type LocalFoodLogRow } from "../lib/food-log-repo";
 import { CACHED_GOAL_KEY, getKv, setKv } from "../lib/kv-store";
 import type { SqlDb } from "../lib/sql-db";
 import { syncNow } from "../lib/sync-engine";
 import { getActiveSession, listSetsForSession } from "../lib/workout-repo";
 import type { MainTabScreenProps } from "../navigation/MainTabs";
 import { colors, radius, space } from "../theme";
+
+/** How far back to look for the streak calculation - well beyond any realistic streak length, so
+ * this is really just a bound on the local query, not a cap on the streak itself. */
+const STREAK_LOOKBACK_DAYS = 400;
 
 type Goal = GetProfileResponse["goal"];
 
@@ -47,6 +52,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [entries, setEntries] = useState<LocalFoodLogRow[]>([]);
   const [activeWorkoutSets, setActiveWorkoutSets] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [streak, setStreak] = useState<ReturnType<typeof computeLoggingStreak> | null>(null);
 
   const loadEntries = useCallback(async (db: SqlDb) => {
     setEntries(await listByLocalDay(db, accountId, todayDate()));
@@ -64,6 +70,14 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
     // changes (e.g. from another device) once the sync has actually happened.
     await loadEntries(db);
     void syncNow(db, API_URL, session.accessToken).then(() => loadEntries(db));
+
+    // Streak is computed entirely from the local mirror (packages/shared's computeLoggingStreak) -
+    // no server round trip, same "derive it from what's already synced" pattern as PRs.
+    const sinceDate = new Date(Date.now() - STREAK_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const loggedDays = await listLoggedLocalDays(db, accountId, sinceDate);
+    setStreak(computeLoggingStreak(loggedDays, todayDate()));
 
     const activeSession = await getActiveSession(db, accountId);
     setActiveWorkoutSets(activeSession ? (await listSetsForSession(db, activeSession.id)).length : null);
@@ -127,10 +141,29 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
       keyExtractor={(group) => group.mealType}
       ListHeaderComponent={
         <View>
-          <AppText variant="h1">Today</AppText>
-          <AppText variant="body" color={colors.textSecondary} style={{ marginBottom: space.lg }}>
-            {new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
-          </AppText>
+          <View style={{ marginBottom: space.lg }}>
+            <View style={styles.titleRow}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="h1">Today</AppText>
+                <AppText variant="body" color={colors.textSecondary}>
+                  {new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                </AppText>
+              </View>
+              {streak && streak.length > 0 ? (
+                <View style={styles.streakChip}>
+                  <MaterialCommunityIcons name="fire" size={16} color={colors.accent} />
+                  <AppText variant="captionMedium" numbers color={colors.accent} style={{ marginLeft: 2 }}>
+                    {streak.length}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
+            {streak?.freezeUsedThisWeek ? (
+              <AppText variant="micro" color={colors.textTertiary} style={{ marginTop: space.xs }}>
+                Freeze used this week - don't miss two days in a row.
+              </AppText>
+            ) : null}
+          </View>
 
           {goal ? (
             <Card style={styles.heroCard}>
@@ -240,6 +273,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   list: { flex: 1 },
   content: { padding: space.lg, paddingBottom: space.xxxl },
+  titleRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  streakChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentTonal,
+  },
   heroCard: { alignItems: "center", marginTop: space.sm },
   macroBars: { width: "100%", gap: space.sm, marginTop: space.lg },
   quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
