@@ -1,5 +1,6 @@
 {
   "name": "@fitness-app/shared",
+  "description": "Pure TypeScript formulas and Zod schemas shared by apps/api and apps/mobile: macro targets, diet classification, PR detection, meal-summary math.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

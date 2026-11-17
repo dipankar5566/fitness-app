@@ -1,5 +1,6 @@
 {
   "name": "@fitness-app/mobile",
+  "description": "Expo (TypeScript) app: offline-first food/workout logging, AI meal parsing, barcode scan, programs, and the Today/Log/Workout/Me tab UI.",
   "version": "0.0.0",
   "private": true,
   "main": "index.ts",

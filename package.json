@@ -1,5 +1,6 @@
 {
   "name": "fitness-app",
+  "description": "Nutrition + workout tracking app for Indian gym-goers (NestJS API + Expo mobile monorepo).",
   "private": true,
   "engines": {
     "node": ">=20"

@@ -1,5 +1,6 @@
 {
   "name": "@fitness-app/api",
+  "description": "NestJS API: guest auth, food search/logging, offline sync, exercises/programs, AI meal parsing + coach, barcode lookup.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
