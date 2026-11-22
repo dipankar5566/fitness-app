@@ -10,14 +10,19 @@ import { waterGoalMl } from "@fitness-app/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import * as Crypto from "expo-crypto";
-import { Alert, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { Alert, FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { MacroBar, ProgressRing } from "../components/Charts";
-import { AppText, Card, EmptyState, IconButton, SectionHeader } from "../components/ui";
+import { LineSpark, MacroBar, ProgressRing } from "../components/Charts";
+import { AppText, Button, Card, EmptyState, IconButton, SectionHeader, TextField } from "../components/ui";
 import { getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
-import { getLatest as getLatestBodyMetric } from "../lib/body-metric-repo";
+import {
+  getLatest as getLatestBodyMetric,
+  insert as insertBodyMetric,
+  listRecent as listRecentBodyMetric,
+  type LocalBodyMetric,
+} from "../lib/body-metric-repo";
 import {
   insert as insertWater,
   softDeleteLatestBetween as removeLatestWater,
@@ -84,6 +89,9 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [hcExercise, setHcExercise] = useState<HcExerciseSessionSummary | null>(null);
   const [waterMl, setWaterMl] = useState(0);
   const [waterGoal, setWaterGoal] = useState(() => waterGoalMl(null));
+  const [weightReadings, setWeightReadings] = useState<LocalBodyMetric[]>([]);
+  const [weightModalOpen, setWeightModalOpen] = useState(false);
+  const [weightInput, setWeightInput] = useState("");
 
   const loadEntries = useCallback(async (db: SqlDb) => {
     setEntries(await listByLocalDay(db, accountId, todayDate()));
@@ -123,6 +131,10 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
     const latestWeight = await getLatestBodyMetric(db, accountId, "weight_kg");
     setWaterGoal(waterGoalMl(latestWeight?.value ?? null));
     await loadWater(db);
+
+    // Weight trend: recent readings (Health Connect imports and manual entries both land in
+    // body_metric), newest first - the card reverses them for a left-to-right sparkline.
+    setWeightReadings(await listRecentBodyMetric(db, accountId, "weight_kg", 30));
 
     // Health Connect: only reads what's opted into (HealthConnectScreen), and only on an Android
     // device where it's actually available - getHcStatus/the read functions themselves already
@@ -183,6 +195,34 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
     },
     [accountId, loadWater],
   );
+
+  const saveWeight = useCallback(async () => {
+    const value = Number(weightInput);
+    if (!Number.isFinite(value) || value <= 0) {
+      Alert.alert("Enter a weight", "Please enter your weight in kg.");
+      return;
+    }
+    const db = await getDatabase();
+    const now = new Date().toISOString();
+    await insertBodyMetric(db, {
+      id: Crypto.randomUUID(),
+      accountId,
+      metricType: "weight_kg",
+      value,
+      photoRef: null,
+      recordedAt: now,
+      isDeleted: false,
+      updatedAt: now,
+    });
+    setWeightModalOpen(false);
+    setWeightInput("");
+    setWeightReadings(await listRecentBodyMetric(db, accountId, "weight_kg", 30));
+    setWaterGoal(waterGoalMl(value));
+    const session = await loadGuestSession();
+    if (session) {
+      void syncNow(db, API_URL, session.accessToken);
+    }
+  }, [accountId, weightInput]);
 
   useFocusEffect(
     useCallback(() => {
@@ -308,6 +348,28 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
             </AppText>
           </Card>
 
+          <Card style={{ marginTop: space.lg }}>
+            <View style={styles.waterHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <MaterialCommunityIcons name="scale-bathroom" size={20} color={colors.primary} />
+                <AppText variant="bodyMedium" style={{ marginLeft: space.sm }}>Weight</AppText>
+              </View>
+              {weightReadings[0]?.value != null ? (
+                <AppText variant="bodyMedium" numbers>{weightReadings[0].value.toFixed(1)} kg</AppText>
+              ) : null}
+            </View>
+            {weightReadings.length >= 2 ? (
+              <View style={{ marginTop: space.sm, alignItems: "center" }}>
+                <LineSpark values={[...weightReadings].reverse().map((r) => r.value ?? 0)} />
+              </View>
+            ) : (
+              <AppText variant="micro" color={colors.textTertiary} style={{ marginTop: space.xs }}>
+                Log your weight to see your trend.
+              </AppText>
+            )}
+            <Button title="Log weight" variant="ghost" onPress={() => setWeightModalOpen(true)} style={{ marginTop: space.sm }} />
+          </Card>
+
           <View style={styles.quickActions}>
             <QuickAction icon="magnify" label="Search" onPress={() => navigation.navigate("FoodSearch", { accountId })} />
             <QuickAction icon="chat-processing-outline" label="AI / Photo" onPress={() => navigation.navigate("LogMealFromText", { accountId })} />
@@ -330,6 +392,35 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} />
           </Pressable>
+
+          <Modal
+            visible={weightModalOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setWeightModalOpen(false)}
+          >
+            <Pressable style={styles.modalBackdrop} onPress={() => setWeightModalOpen(false)}>
+              <Pressable style={styles.modalCard} onPress={() => undefined}>
+                <AppText variant="h3">Log weight</AppText>
+                <TextField
+                  placeholder="kg"
+                  keyboardType="decimal-pad"
+                  value={weightInput}
+                  onChangeText={setWeightInput}
+                  autoFocus
+                  style={{ marginTop: space.md }}
+                />
+                <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.md }}>
+                  <View style={{ flex: 1 }}>
+                    <Button title="Cancel" variant="secondary" onPress={() => setWeightModalOpen(false)} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button title="Save" onPress={() => void saveWeight()} />
+                  </View>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
         </View>
       }
       renderItem={({ item: group }) => (
@@ -413,6 +504,13 @@ const styles = StyleSheet.create({
   quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
   waterHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   waterControls: { flexDirection: "row", alignItems: "center" },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    paddingHorizontal: space.xl,
+  },
+  modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.lg },
   quickAction: {
     flex: 1,
     alignItems: "center",

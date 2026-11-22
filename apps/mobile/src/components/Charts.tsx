@@ -1,4 +1,4 @@
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Polyline } from "react-native-svg";
 import { StyleSheet, View } from "react-native";
 import { colors, radius, space } from "../theme";
 import { AppText } from "./ui";
@@ -85,6 +85,39 @@ export function MacroBar({ label, grams, targetGrams, color }: MacroBarProps) {
         <View style={[styles.macroBarFill, { width: `${fraction * 100}%`, backgroundColor: color }]} />
       </View>
     </View>
+  );
+}
+
+interface LineSparkProps {
+  values: number[]; // chronological (oldest -> newest)
+  width?: number;
+  height?: number;
+  color?: string;
+}
+
+/** A tiny line sparkline (e.g. a weight trend). Renders nothing for fewer than two points - a
+ * single reading has no trend to draw. Scales to the series' own min/max with a little vertical
+ * padding so the end caps aren't clipped. */
+export function LineSpark({ values, width = 240, height = 48, color = colors.primary }: LineSparkProps) {
+  if (values.length < 2) {
+    return null;
+  }
+  const pad = 4;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const stepX = width / (values.length - 1);
+  const points = values
+    .map((value, i) => {
+      const x = i * stepX;
+      const y = pad + (height - 2 * pad) * (1 - (value - min) / range);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <Svg width={width} height={height}>
+      <Polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+    </Svg>
   );
 }
 

@@ -69,6 +69,21 @@ export async function getLatest(db: SqlDb, accountId: string, metricType: string
   return row ? fromSqlRow(row) : null;
 }
 
+/** Most recent readings of a type (newest first), for the Home weight-trend sparkline. */
+export async function listRecent(
+  db: SqlDb,
+  accountId: string,
+  metricType: string,
+  limit = 30,
+): Promise<LocalBodyMetric[]> {
+  const rows = await db.getAllAsync<BodyMetricSqlRow>(
+    `SELECT * FROM body_metric WHERE account_id = ? AND metric_type = ? AND is_deleted = 0
+     ORDER BY recorded_at DESC LIMIT ?`,
+    [accountId, metricType, limit],
+  );
+  return rows.map(fromSqlRow);
+}
+
 export async function getDirty(db: SqlDb): Promise<LocalBodyMetric[]> {
   const rows = await db.getAllAsync<BodyMetricSqlRow>("SELECT * FROM body_metric WHERE is_dirty = 1");
   return rows.map(fromSqlRow);

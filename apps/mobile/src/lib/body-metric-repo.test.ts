@@ -4,6 +4,7 @@ import {
   getDirty,
   getLatest,
   insert,
+  listRecent,
   markClean,
   type LocalBodyMetric,
 } from "./body-metric-repo";
@@ -102,6 +103,26 @@ describe("body-metric-repo", () => {
 
       const dirty = await getDirty(db);
       expect(dirty[0].isDeleted).toBe(true); // the local delete survived, not overwritten
+    });
+  });
+
+  describe("listRecent", () => {
+    it("returns readings newest-first, excluding other types and soft-deletes", async () => {
+      await insert(db, { ...ROW, id: "a1", value: 72, recordedAt: "2026-11-14T06:00:00.000Z" });
+      await insert(db, { ...ROW, id: "a2", value: 71, recordedAt: "2026-11-16T06:00:00.000Z" });
+      await insert(db, { ...ROW, id: "a3", value: 70, recordedAt: "2026-11-15T06:00:00.000Z" });
+      await insert(db, { ...ROW, id: "w1", metricType: "waist_cm", value: 80, recordedAt: "2026-11-17T06:00:00.000Z" });
+
+      const recent = await listRecent(db, "account-1", "weight_kg");
+
+      expect(recent.map((r) => r.id)).toEqual(["a2", "a3", "a1"]); // by recorded_at desc
+    });
+
+    it("honors the limit", async () => {
+      await insert(db, { ...ROW, id: "a1", recordedAt: "2026-11-14T06:00:00.000Z" });
+      await insert(db, { ...ROW, id: "a2", recordedAt: "2026-11-15T06:00:00.000Z" });
+
+      expect(await listRecent(db, "account-1", "weight_kg", 1)).toHaveLength(1);
     });
   });
 });
