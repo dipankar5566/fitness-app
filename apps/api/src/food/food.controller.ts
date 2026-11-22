@@ -10,7 +10,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import { dietTypeSchema, foodReportRequestSchema } from "@fitness-app/shared";
+import { dietTypeSchema, foodReportRequestSchema, mealTypeSchema } from "@fitness-app/shared";
 import type { Request } from "express";
 import { ZodError } from "zod";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard.js";
@@ -56,6 +56,28 @@ export class FoodController {
     try {
       const parsedDietType = dietType ? dietTypeSchema.parse(dietType) : undefined;
       return this.food.search(q, limit ? Number(limit) : 20, parsedDietType);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        throw new BadRequestException(error.issues);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * "What to log next" for a meal - top foods by meal relevance (0007), optionally diet-filtered.
+   * Open reference data like /food/search; declared before :code so the literal path wins.
+   */
+  @Get("suggestions")
+  async suggestions(
+    @Query("mealType") mealType?: string,
+    @Query("limit") limit?: string,
+    @Query("dietType") dietType?: string,
+  ) {
+    try {
+      const parsedMealType = mealTypeSchema.parse(mealType);
+      const parsedDietType = dietType ? dietTypeSchema.parse(dietType) : undefined;
+      return this.food.suggestions(parsedMealType, limit ? Number(limit) : 10, parsedDietType);
     } catch (error) {
       if (error instanceof ZodError) {
         throw new BadRequestException(error.issues);

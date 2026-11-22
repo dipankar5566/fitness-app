@@ -1,5 +1,11 @@
 import { Injectable } from "@nestjs/common";
-import { isAllowed, type DietClass, type DietType, type FoodReportRequest } from "@fitness-app/shared";
+import {
+  isAllowed,
+  type DietClass,
+  type DietType,
+  type FoodReportRequest,
+  type MealType,
+} from "@fitness-app/shared";
 import { DatabaseService } from "../database/database.service.js";
 
 interface SearchFoodsRow {
@@ -155,6 +161,41 @@ export class FoodService {
       [q, limit],
     );
     return result.rows.map((row) => ({ ...row, score: Number(row.score) }));
+  }
+
+  /**
+   * "What to log next" for a given meal - the top foods by app.food_meal_relevance (0007) for that
+   * meal, optionally filtered to a diet type the same way search() does (over-fetch, then drop
+   * disallowed foods in app code; unverified foods are kept). Open reference data like search() -
+   * no per-account data and no cost, so no auth guard (the approved plan noted auth, but there's
+   * nothing account-scoped or billable here, so it follows /food/search's open posture instead).
+   */
+  async suggestions(mealType: MealType, limit: number, dietType?: DietType): Promise<SearchFoodsRow[]> {
+    const overFetchLimit = dietType ? Math.min(limit * 4, 200) : limit;
+    const result = await this.db.query<Omit<SearchFoodsRow, "dietClass">>(
+      `SELECT f.id AS food_id, f.code, f.name, f.food_type, r.score
+       FROM app.food_meal_relevance r JOIN food f ON f.code = r.food_code
+       WHERE r.meal_type = $1
+       ORDER BY r.score DESC, f.name
+       LIMIT $2`,
+      [mealType, overFetchLimit],
+    );
+
+    const dietClassByCode = await this.getDietClasses(result.rows.map((row) => row.code));
+    const withDietClass: SearchFoodsRow[] = result.rows.map((row) => ({
+      ...row,
+      score: Number(row.score),
+      dietClass: dietClassByCode.get(row.code)?.dietClass ?? null,
+    }));
+
+    if (!dietType) {
+      return withDietClass.slice(0, limit);
+    }
+    const filtered = withDietClass.filter((row) => {
+      const entry = dietClassByCode.get(row.code);
+      return isAllowed(dietType, entry?.dietClass ?? null, entry?.jainOk ?? null);
+    });
+    return filtered.slice(0, limit);
   }
 
   /**

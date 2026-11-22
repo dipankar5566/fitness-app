@@ -148,6 +148,45 @@ describe("FoodService", () => {
     });
   });
 
+  describe("suggestions", () => {
+    it("returns meal-relevant foods with dietClass attached when no dietType is given", async () => {
+      db.query
+        .mockResolvedValueOnce({
+          rows: [{ food_id: 1, code: "ASC100", name: "Poha", food_type: "recipe", score: "0.62" }],
+        })
+        .mockResolvedValueOnce({ rows: [{ food_code: "ASC100", diet_class: "veg", jain_ok: null }] });
+
+      const results = await service.suggestions("breakfast", 10);
+
+      expect(results).toEqual([
+        { food_id: 1, code: "ASC100", name: "Poha", food_type: "recipe", score: 0.62, dietClass: "veg" },
+      ]);
+      expect(db.query.mock.calls[0][0]).toContain("app.food_meal_relevance");
+      expect(db.query.mock.calls[0][1]).toEqual(["breakfast", 10]);
+    });
+
+    it("over-fetches then filters out a disallowed food for a given dietType", async () => {
+      db.query
+        .mockResolvedValueOnce({
+          rows: [
+            { food_id: 1, code: "N001", name: "Egg bhurji", food_type: "recipe", score: "0.7" },
+            { food_id: 2, code: "V001", name: "Veg poha", food_type: "recipe", score: "0.6" },
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { food_code: "N001", diet_class: "egg", jain_ok: null },
+            { food_code: "V001", diet_class: "veg", jain_ok: null },
+          ],
+        });
+
+      const results = await service.suggestions("breakfast", 5, "veg");
+
+      expect(results.map((r) => r.code)).toEqual(["V001"]);
+      expect(db.query.mock.calls[0][1]).toEqual(["breakfast", 20]); // over-fetched 5*4
+    });
+  });
+
   describe("reportFood", () => {
     it("inserts a report and returns the new id", async () => {
       db.query.mockResolvedValueOnce({ rows: [{ id: "report-1" }] });
