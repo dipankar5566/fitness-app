@@ -148,6 +148,27 @@ describe("FoodService", () => {
     });
   });
 
+  describe("reportFood", () => {
+    it("inserts a report and returns the new id", async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ id: "report-1" }] });
+
+      const result = await service.reportFood("acc-1", { kind: "missing", query: "ragi mudde" });
+
+      expect(result).toEqual({ id: "report-1" });
+      const [sql, params] = db.query.mock.calls[0];
+      expect(sql).toContain("INSERT INTO app.food_report");
+      expect(params).toEqual(["acc-1", "missing", "ragi mudde", null, null]);
+    });
+
+    it("passes foodRef for a wrong_nutrients report, with null query", async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ id: "report-2" }] });
+
+      await service.reportFood("acc-1", { kind: "wrong_nutrients", foodRef: "L002", note: "too high" });
+
+      expect(db.query.mock.calls[0][1]).toEqual(["acc-1", "wrong_nutrients", null, "L002", "too high"]);
+    });
+  });
+
   describe("getNutrientSummaries", () => {
     it("returns an empty map for an empty code list without querying", async () => {
       const summaries = await service.getNutrientSummaries([]);

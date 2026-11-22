@@ -16,6 +16,7 @@ import {
   parseMealPhoto,
   pullSync,
   pushSync,
+  reportFood,
   searchExercises,
   searchFoods,
   sendCoachMessage,
@@ -668,5 +669,43 @@ describe("isNetworkError", () => {
 
   it("is false for an ApiError (server responded, just not with 2xx)", () => {
     expect(isNetworkError(new ApiError("get profile failed with status 401"))).toBe(false);
+  });
+});
+
+describe("reportFood", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("posts the report with the auth header and returns the new id", async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ id: "report-1" }), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await reportFood("http://localhost:3001", "token-1", {
+      kind: "missing",
+      query: "ragi mudde",
+    });
+
+    expect(result).toEqual({ id: "report-1" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:3001/food/report",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer token-1" }),
+      }),
+    );
+  });
+
+  it("throws ApiError on a non-2xx response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 400 })),
+    );
+
+    await expect(
+      reportFood("http://localhost:3001", "token-1", { kind: "missing", query: "x" }),
+    ).rejects.toBeInstanceOf(ApiError);
   });
 });

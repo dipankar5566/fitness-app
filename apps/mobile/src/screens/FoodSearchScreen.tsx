@@ -1,9 +1,10 @@
 import { isAllowed, type DietClass, type DietType } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, View } from "react-native";
-import { AppText, Badge, EmptyState, ListRow, Screen, TextField } from "../components/ui";
-import { isNetworkError, searchFoods } from "../lib/api";
+import { ActivityIndicator, Alert, FlatList, View } from "react-native";
+import { AppText, Badge, Button, EmptyState, ListRow, Screen, TextField } from "../components/ui";
+import { isNetworkError, reportFood, searchFoods } from "../lib/api";
+import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { listRecentFoods } from "../lib/food-cache-repo";
@@ -40,6 +41,28 @@ export function FoodSearchScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [dietType, setDietType] = useState<DietType | null>(null);
+  const [isReporting, setIsReporting] = useState(false);
+
+  const handleReportMissing = async () => {
+    const term = query.trim();
+    if (!term || isReporting) {
+      return;
+    }
+    setIsReporting(true);
+    try {
+      const session = await loadGuestSession();
+      if (!session) {
+        Alert.alert("Not signed in", "Please reopen the app and try again.");
+        return;
+      }
+      await reportFood(API_URL, session.accessToken, { kind: "missing", query: term });
+      Alert.alert("Thanks!", `We'll look into adding "${term}".`);
+    } catch {
+      Alert.alert("Couldn't send", "Please try again when you're back online.");
+    } finally {
+      setIsReporting(false);
+    }
+  };
 
   useEffect(() => {
     void (async () => {
@@ -152,6 +175,17 @@ export function FoodSearchScreen({ navigation, route }: Props) {
         ListEmptyComponent={
           hasSearched && !isSearching ? (
             <EmptyState icon="magnify" title="No results." style={{ marginTop: space.xxl }} />
+          ) : undefined
+        }
+        ListFooterComponent={
+          hasSearched && !isSearching && query.trim() ? (
+            <Button
+              title={isReporting ? "Sending…" : "Can't find it? Report a missing food"}
+              variant="ghost"
+              disabled={isReporting}
+              onPress={handleReportMissing}
+              style={{ marginTop: space.lg }}
+            />
           ) : undefined
         }
       />

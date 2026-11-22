@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { isAllowed, type DietClass, type DietType } from "@fitness-app/shared";
+import { isAllowed, type DietClass, type DietType, type FoodReportRequest } from "@fitness-app/shared";
 import { DatabaseService } from "../database/database.service.js";
 
 interface SearchFoodsRow {
@@ -155,6 +155,20 @@ export class FoodService {
       [q, limit],
     );
     return result.rows.map((row) => ({ ...row, score: Number(row.score) }));
+  }
+
+  /**
+   * Records a user's "can't find it" / "numbers look wrong" report in app.food_report (0008) for
+   * out-of-band review. One-way write; nothing is synced back. Returns the new report id.
+   */
+  async reportFood(accountId: string, input: FoodReportRequest): Promise<{ id: string }> {
+    const result = await this.db.query<{ id: string }>(
+      `INSERT INTO app.food_report (account_id, kind, query, food_ref, note)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [accountId, input.kind, input.query ?? null, input.foodRef ?? null, input.note ?? null],
+    );
+    return { id: result.rows[0].id };
   }
 
   private async getDietClasses(codes: string[]): Promise<Map<string, DietClassEntry>> {

@@ -49,6 +49,30 @@ export const updateFoodLogRequestSchema = z.object({
 });
 export type UpdateFoodLogRequest = z.infer<typeof updateFoodLogRequestSchema>;
 
+// POST /food/report body - a user telling us a food is missing from search, or that an existing
+// food's numbers look wrong. Not a syncable entity (see 0008_food_report.sql); server sets the
+// account, status and timestamp. 'missing' needs the search query; 'wrong_nutrients' needs the
+// food code being flagged.
+export const foodReportKindSchema = z.enum(["missing", "wrong_nutrients"]);
+export type FoodReportKind = z.infer<typeof foodReportKindSchema>;
+
+export const foodReportRequestSchema = z
+  .object({
+    kind: foodReportKindSchema,
+    query: z.string().trim().min(1).max(200).optional(),
+    foodRef: z.string().trim().min(1).max(64).optional(),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((value) => value.kind !== "missing" || Boolean(value.query), {
+    message: "query is required for a 'missing' report",
+    path: ["query"],
+  })
+  .refine((value) => value.kind !== "wrong_nutrients" || Boolean(value.foodRef), {
+    message: "foodRef is required for a 'wrong_nutrients' report",
+    path: ["foodRef"],
+  });
+export type FoodReportRequest = z.infer<typeof foodReportRequestSchema>;
+
 export const workoutSetSchema = syncableBaseSchema.extend({
   sessionId: z.string().uuid(),
   exerciseId: z.string(),

@@ -1,12 +1,14 @@
 import {
   coachMessageRequestSchema,
   createFoodLogRequestSchema,
+  foodReportRequestSchema,
   onboardingRequestSchema,
   syncPullResponseSchema,
   syncPushRequestSchema,
   syncPushResponseSchema,
   type CreateFoodLogRequest,
   type DietType,
+  type FoodReportRequest,
   type OnboardingRequest,
   type SyncPullResponse,
   type SyncPushRequest,
@@ -161,6 +163,25 @@ export async function getFoodDetail(apiUrl: string, code: string): Promise<FoodD
     throw new ApiError(`get food detail failed with status ${response.status}`);
   }
   return foodDetailSchema.parse(await response.json());
+}
+
+const foodReportResponseSchema = z.object({ id: z.string() });
+
+/** Submits a "can't find it" / "numbers look wrong" report (POST /food/report, auth-gated). */
+export async function reportFood(
+  apiUrl: string,
+  accessToken: string,
+  input: FoodReportRequest,
+): Promise<{ id: string }> {
+  const response = await fetch(`${apiUrl}/food/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(foodReportRequestSchema.parse(input)),
+  });
+  if (!response.ok) {
+    throw new ApiError(`food report failed with status ${response.status}`);
+  }
+  return foodReportResponseSchema.parse(await response.json());
 }
 
 const macroBreakdownSchema = z.object({
