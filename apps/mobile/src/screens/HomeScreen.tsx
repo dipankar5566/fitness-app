@@ -6,15 +6,23 @@ import {
   sumKcal,
   type MealDisplayType,
 } from "@fitness-app/shared";
+import { waterGoalMl } from "@fitness-app/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
+import * as Crypto from "expo-crypto";
 import { Alert, FlatList, Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { MacroBar, ProgressRing } from "../components/Charts";
-import { AppText, Card, EmptyState, SectionHeader } from "../components/ui";
+import { AppText, Card, EmptyState, IconButton, SectionHeader } from "../components/ui";
 import { getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
+import { getLatest as getLatestBodyMetric } from "../lib/body-metric-repo";
+import {
+  insert as insertWater,
+  softDeleteLatestBetween as removeLatestWater,
+  totalMlBetween as totalWaterMlBetween,
+} from "../lib/water-repo";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { listByLocalDay, listLoggedLocalDays, softDelete, type LocalFoodLogRow } from "../lib/food-log-repo";
@@ -44,6 +52,16 @@ function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Half-open [start, end) ISO bounds of "today", using the same UTC day as todayDate() so the water
+ * total and the food diary agree on which day it is. */
+function todayBoundsIso(): { startIso: string; endIso: string } {
+  const startIso = `${todayDate()}T00:00:00.000Z`;
+  const endIso = new Date(new Date(startIso).getTime() + 24 * 60 * 60 * 1000).toISOString();
+  return { startIso, endIso };
+}
+
+const GLASS_ML = 250;
+
 const MEAL_LABELS: Record<MealDisplayType, string> = {
   breakfast: "Breakfast",
   lunch: "Lunch",
@@ -64,9 +82,16 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [streak, setStreak] = useState<ReturnType<typeof computeLoggingStreak> | null>(null);
   const [hcSteps, setHcSteps] = useState<number | null>(null);
   const [hcExercise, setHcExercise] = useState<HcExerciseSessionSummary | null>(null);
+  const [waterMl, setWaterMl] = useState(0);
+  const [waterGoal, setWaterGoal] = useState(() => waterGoalMl(null));
 
   const loadEntries = useCallback(async (db: SqlDb) => {
     setEntries(await listByLocalDay(db, accountId, todayDate()));
+  }, [accountId]);
+
+  const loadWater = useCallback(async (db: SqlDb) => {
+    const { startIso, endIso } = todayBoundsIso();
+    setWaterMl(await totalWaterMlBetween(db, accountId, startIso, endIso));
   }, [accountId]);
 
   const refresh = useCallback(async () => {
@@ -92,6 +117,12 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
 
     const activeSession = await getActiveSession(db, accountId);
     setActiveWorkoutSets(activeSession ? (await listSetsForSession(db, activeSession.id)).length : null);
+
+    // Water: today's total from the local mirror, goal derived from the latest synced weight
+    // (falls back to a sane default when there's no weight yet).
+    const latestWeight = await getLatestBodyMetric(db, accountId, "weight_kg");
+    setWaterGoal(waterGoalMl(latestWeight?.value ?? null));
+    await loadWater(db);
 
     // Health Connect: only reads what's opted into (HealthConnectScreen), and only on an Android
     // device where it's actually available - getHcStatus/the read functions themselves already
@@ -125,7 +156,33 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
     }
 
     setIsLoading(false);
-  }, [accountId, loadEntries]);
+  }, [accountId, loadEntries, loadWater]);
+
+  const adjustWater = useCallback(
+    async (direction: "add" | "remove") => {
+      const db = await getDatabase();
+      const now = new Date().toISOString();
+      if (direction === "add") {
+        await insertWater(db, {
+          id: Crypto.randomUUID(),
+          accountId,
+          amountMl: GLASS_ML,
+          recordedAt: now,
+          isDeleted: false,
+          updatedAt: now,
+        });
+      } else {
+        const { startIso, endIso } = todayBoundsIso();
+        await removeLatestWater(db, accountId, startIso, endIso, now);
+      }
+      await loadWater(db);
+      const session = await loadGuestSession();
+      if (session) {
+        void syncNow(db, API_URL, session.accessToken);
+      }
+    },
+    [accountId, loadWater],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -228,6 +285,28 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
               ) : null}
             </Card>
           ) : null}
+
+          <Card style={{ marginTop: space.lg }}>
+            <View style={styles.waterHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <MaterialCommunityIcons name="cup-water" size={20} color={colors.primary} />
+                <AppText variant="bodyMedium" style={{ marginLeft: space.sm }}>Water</AppText>
+                {waterMl >= waterGoal && waterGoal > 0 ? (
+                  <MaterialCommunityIcons name="check-circle" size={16} color={colors.primary} style={{ marginLeft: space.sm }} />
+                ) : null}
+              </View>
+              <View style={styles.waterControls}>
+                <IconButton icon="minus-circle-outline" onPress={() => void adjustWater("remove")} color={colors.textSecondary} />
+                <AppText variant="bodyMedium" numbers style={{ marginHorizontal: space.sm, minWidth: 92, textAlign: "center" }}>
+                  {(waterMl / 1000).toFixed(2)} / {(waterGoal / 1000).toFixed(1)} L
+                </AppText>
+                <IconButton icon="plus-circle" onPress={() => void adjustWater("add")} color={colors.primary} />
+              </View>
+            </View>
+            <AppText variant="micro" color={colors.textTertiary} style={{ marginTop: space.xs }}>
+              One glass = {GLASS_ML} ml
+            </AppText>
+          </Card>
 
           <View style={styles.quickActions}>
             <QuickAction icon="magnify" label="Search" onPress={() => navigation.navigate("FoodSearch", { accountId })} />
@@ -332,6 +411,8 @@ const styles = StyleSheet.create({
   heroCard: { alignItems: "center", marginTop: space.sm },
   macroBars: { width: "100%", gap: space.sm, marginTop: space.lg },
   quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
+  waterHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  waterControls: { flexDirection: "row", alignItems: "center" },
   quickAction: {
     flex: 1,
     alignItems: "center",
