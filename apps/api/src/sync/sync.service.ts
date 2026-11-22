@@ -4,6 +4,7 @@ import {
   customFoodIngredientSchema,
   customFoodSchema,
   foodLogEntrySchema,
+  waterLogSchema,
   workoutSessionSchema,
   workoutSetSchema,
 } from "@fitness-app/shared";
@@ -254,6 +255,37 @@ const bodyMetricAdapter: TableAdapter = {
  * table beyond this map (food_log's macro enrichment in pull() is the one exception, since macros
  * aren't part of the row's own stored columns). accountId is always taken from the JWT, never the
  * pushed row, so a row can never be pushed into someone else's account. */
+const waterLogAdapter: TableAdapter = {
+  upsertSchema: waterLogSchema,
+  deleteSchema: deleteRowSchema,
+  conflictTable: "app.water_log",
+  upsertSql: `INSERT INTO app.water_log (id, account_id, amount_ml, recorded_at, is_deleted, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (id) DO UPDATE SET
+       amount_ml = EXCLUDED.amount_ml, recorded_at = EXCLUDED.recorded_at,
+       is_deleted = EXCLUDED.is_deleted, updated_at = EXCLUDED.updated_at,
+       server_updated_at = now()
+     WHERE app.water_log.account_id = $2 AND app.water_log.updated_at <= EXCLUDED.updated_at`,
+  upsertParams: (accountId, row) => [
+    row.id, accountId, row.amountMl, row.recordedAt, row.isDeleted, row.updatedAt,
+  ],
+  deleteSql: `UPDATE app.water_log SET is_deleted = true, updated_at = $3, server_updated_at = now()
+     WHERE id = $1 AND account_id = $2 AND updated_at <= $3`,
+  deleteParams: (accountId, row) => [row.id, accountId, row.updatedAt],
+  selectSql: (hasSince) =>
+    hasSince
+      ? "SELECT * FROM app.water_log WHERE account_id = $1 AND server_updated_at > $2 ORDER BY server_updated_at"
+      : "SELECT * FROM app.water_log WHERE account_id = $1 ORDER BY server_updated_at",
+  toChangeRow: (row) => ({
+    id: row.id,
+    accountId: row.account_id,
+    isDeleted: row.is_deleted,
+    updatedAt: (row.updated_at as Date).toISOString(),
+    amountMl: Number(row.amount_ml),
+    recordedAt: (row.recorded_at as Date).toISOString(),
+  }),
+};
+
 const registry: Partial<Record<SyncTableName, TableAdapter>> = {
   food_log: foodLogAdapter,
   custom_food: customFoodAdapter,
@@ -261,6 +293,7 @@ const registry: Partial<Record<SyncTableName, TableAdapter>> = {
   workout_session: workoutSessionAdapter,
   workout_set: workoutSetAdapter,
   body_metric: bodyMetricAdapter,
+  water_log: waterLogAdapter,
 };
 
 @Injectable()

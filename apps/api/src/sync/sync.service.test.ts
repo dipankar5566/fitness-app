@@ -456,7 +456,8 @@ describe("SyncService", () => {
               server_updated_at: serverUpdatedAt,
             },
           ],
-        });
+        })
+        .mockResolvedValueOnce({ rows: [] }); // water_log
 
       const result = await service.pull("account-1", null);
 
@@ -466,6 +467,40 @@ describe("SyncService", () => {
         table: "body_metric",
         op: "upsert",
         row: { metricType: "weight_kg", value: 72.5 },
+      });
+    });
+
+    it("pulls a water_log row through the registry", async () => {
+      const serverUpdatedAt = new Date("2026-11-17T07:05:00.000Z");
+      db.query
+        .mockResolvedValueOnce({ rows: [] }) // food_log
+        .mockResolvedValueOnce({ rows: [] }) // custom_food
+        .mockResolvedValueOnce({ rows: [] }) // custom_food_ingredient
+        .mockResolvedValueOnce({ rows: [] }) // workout_session
+        .mockResolvedValueOnce({ rows: [] }) // workout_set
+        .mockResolvedValueOnce({ rows: [] }) // body_metric
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "88888888-8888-8888-8888-888888888888",
+              account_id: "account-1",
+              amount_ml: "250",
+              recorded_at: new Date("2026-11-17T07:00:00.000Z"),
+              is_deleted: false,
+              updated_at: new Date("2026-11-17T07:00:00.000Z"),
+              server_updated_at: serverUpdatedAt,
+            },
+          ],
+        });
+
+      const result = await service.pull("account-1", null);
+
+      expect(result.nextSyncToken).toBe(serverUpdatedAt.toISOString());
+      expect(result.changes).toHaveLength(1);
+      expect(result.changes[0]).toMatchObject({
+        table: "water_log",
+        op: "upsert",
+        row: { amountMl: 250 },
       });
     });
   });

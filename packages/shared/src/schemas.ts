@@ -120,6 +120,13 @@ export const bodyMetricSchema = syncableBaseSchema.extend({
 });
 export type BodyMetric = z.infer<typeof bodyMetricSchema>;
 
+// Water intake (0009_water_log.sql) — one syncable row per drink event (amount in ml at a time).
+export const waterLogSchema = syncableBaseSchema.extend({
+  amountMl: z.number().positive(),
+  recordedAt: z.string().datetime(),
+});
+export type WaterLog = z.infer<typeof waterLogSchema>;
+
 // Generic sync envelope — one push/pull protocol for every syncable table (ARCHITECTURE.md §3).
 export const syncTableNameSchema = z.enum([
   "food_log",
@@ -128,6 +135,7 @@ export const syncTableNameSchema = z.enum([
   "workout_session",
   "workout_set",
   "body_metric",
+  "water_log",
 ]);
 export type SyncTableName = z.infer<typeof syncTableNameSchema>;
 

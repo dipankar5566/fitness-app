@@ -5,6 +5,7 @@ import {
   calculateMacroTargets,
   calculateTdee,
   estimateOneRepMax,
+  waterGoalMl,
   type UserBiometrics,
 } from "./targets";
 
@@ -103,5 +104,30 @@ describe("estimateOneRepMax", () => {
   it("estimates a higher 1RM for multi-rep sets (Epley)", () => {
     // 100 * (1 + 5/30) = 116.67 -> rounded to 1dp = 116.7
     expect(estimateOneRepMax(100, 5)).toBeCloseTo(116.7, 1);
+  });
+});
+
+describe("waterGoalMl", () => {
+  it("scales with body weight within the clamp range", () => {
+    // 80 kg * 35 = 2800 -> nearest 250
+    expect(waterGoalMl(80)).toBe(2750);
+    expect(waterGoalMl(90)).toBeGreaterThan(waterGoalMl(70));
+  });
+
+  it("clamps to the 2-4 L range for extreme weights", () => {
+    expect(waterGoalMl(40)).toBe(2000); // 40*35=1400 -> floor
+    expect(waterGoalMl(200)).toBe(4000); // 200*35=7000 -> ceil
+  });
+
+  it("falls back to a sane default when weight is missing", () => {
+    expect(waterGoalMl(null)).toBe(waterGoalMl(65));
+    expect(waterGoalMl(undefined)).toBeGreaterThanOrEqual(2000);
+    expect(waterGoalMl(0)).toBe(waterGoalMl(65));
+  });
+
+  it("returns a multiple of 250 ml (whole glasses)", () => {
+    for (const w of [50, 63, 77, 88, 120]) {
+      expect(waterGoalMl(w) % 250).toBe(0);
+    }
   });
 });

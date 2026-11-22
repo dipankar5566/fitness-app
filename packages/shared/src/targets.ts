@@ -105,3 +105,20 @@ export function estimateOneRepMax(weightKg: number, reps: number): number {
   if (reps <= 1) return weightKg;
   return Math.round(weightKg * (1 + reps / 30) * 10) / 10;
 }
+
+const WATER_ML_PER_KG = 35; // common hydration rule of thumb (~35 ml/kg/day)
+const WATER_GOAL_FLOOR_ML = 2000;
+const WATER_GOAL_CEIL_ML = 4000;
+const DEFAULT_WATER_WEIGHT_KG = 65; // fallback when weight is unknown (no profile yet)
+
+/**
+ * Daily water-intake goal in ml from body weight (~35 ml/kg), clamped to a sensible 2-4 L range so
+ * an extreme or missing weight can't produce an absurd target. Rounded to the nearest 250 ml (one
+ * glass). Pure; used by the Home water tracker card.
+ */
+export function waterGoalMl(weightKg?: number | null): number {
+  const weight = weightKg && weightKg > 0 ? weightKg : DEFAULT_WATER_WEIGHT_KG;
+  const raw = weight * WATER_ML_PER_KG;
+  const clamped = Math.min(WATER_GOAL_CEIL_ML, Math.max(WATER_GOAL_FLOOR_ML, raw));
+  return Math.round(clamped / 250) * 250;
+}
