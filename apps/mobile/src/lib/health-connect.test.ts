@@ -41,6 +41,7 @@ import {
   mapSessionToHcExercisePayload,
   parseHcSettings,
   readRecentExerciseSessions,
+  readTodaySleep,
   readTodaySteps,
   requestHcPermissions,
   stableIdForHcWeight,
@@ -50,20 +51,46 @@ import {
 
 describe("parseHcSettings", () => {
   it("falls back to everything off for null (nothing saved yet)", () => {
-    expect(parseHcSettings(null)).toEqual({ steps: false, exercise: false, weight: false, writeWorkout: false });
+    expect(parseHcSettings(null)).toEqual({ steps: false, exercise: false, weight: false, sleep: false, writeWorkout: false });
   });
 
   it("falls back to everything off for malformed JSON", () => {
-    expect(parseHcSettings("{not valid")).toEqual({ steps: false, exercise: false, weight: false, writeWorkout: false });
+    expect(parseHcSettings("{not valid")).toEqual({ steps: false, exercise: false, weight: false, sleep: false, writeWorkout: false });
   });
 
   it("round-trips a saved settings object, coercing missing fields to false", () => {
-    expect(parseHcSettings(JSON.stringify({ steps: true, weight: true }))).toEqual({
+    expect(parseHcSettings(JSON.stringify({ steps: true, weight: true, sleep: true }))).toEqual({
       steps: true,
       exercise: false,
       weight: true,
+      sleep: true,
       writeWorkout: false,
     });
+  });
+});
+
+describe("readTodaySleep", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    rnMock.Platform.OS = "android";
+  });
+
+  it("sums sleep-session durations in minutes", async () => {
+    hcLibMock.readRecords.mockResolvedValue({
+      records: [
+        { startTime: "2026-11-23T23:00:00.000Z", endTime: "2026-11-24T05:30:00.000Z" }, // 6h30m
+        { startTime: "2026-11-24T14:00:00.000Z", endTime: "2026-11-24T14:30:00.000Z" }, // 30m nap
+      ],
+    });
+
+    expect(await readTodaySleep()).toBe(420); // 390 + 30
+    expect(hcLibMock.readRecords).toHaveBeenCalledWith("SleepSession", expect.anything());
+  });
+
+  it("returns 0 off Android", async () => {
+    rnMock.Platform.OS = "ios";
+    expect(await readTodaySleep()).toBe(0);
+    expect(hcLibMock.readRecords).not.toHaveBeenCalled();
   });
 });
 

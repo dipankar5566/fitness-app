@@ -57,10 +57,11 @@ export interface HcSettings {
   steps: boolean;
   exercise: boolean;
   weight: boolean;
+  sleep: boolean;
   writeWorkout: boolean;
 }
 
-const DEFAULT_HC_SETTINGS: HcSettings = { steps: false, exercise: false, weight: false, writeWorkout: false };
+const DEFAULT_HC_SETTINGS: HcSettings = { steps: false, exercise: false, weight: false, sleep: false, writeWorkout: false };
 
 /** Falls back to every flag off for missing/malformed input, same policy as
  * reminders.ts's parseReminderSettings - a corrupt stored value degrades to "nothing enabled"
@@ -74,6 +75,7 @@ export function parseHcSettings(json: string | null): HcSettings {
       steps: Boolean(parsed.steps),
       exercise: Boolean(parsed.exercise),
       weight: Boolean(parsed.weight),
+      sleep: Boolean(parsed.sleep),
       writeWorkout: Boolean(parsed.writeWorkout),
     };
   } catch {
@@ -89,12 +91,13 @@ export async function saveHcSettings(db: SqlDb, settings: HcSettings): Promise<v
   await setKv(db, HC_SETTINGS_KEY, JSON.stringify(settings));
 }
 
-export type HcPermissionKind = "steps" | "exercise" | "weight" | "write_exercise";
+export type HcPermissionKind = "steps" | "exercise" | "weight" | "sleep" | "write_exercise";
 
 const PERMISSION_BY_KIND: Record<HcPermissionKind, Permission> = {
   steps: { accessType: "read", recordType: "Steps" },
   exercise: { accessType: "read", recordType: "ExerciseSession" },
   weight: { accessType: "read", recordType: "Weight" },
+  sleep: { accessType: "read", recordType: "SleepSession" },
   write_exercise: { accessType: "write", recordType: "ExerciseSession" },
 };
 
@@ -129,6 +132,21 @@ export async function readTodaySteps(): Promise<number> {
     timeRangeFilter: { operator: "between", startTime: startOfDay.toISOString(), endTime: new Date().toISOString() },
   });
   return records.reduce((sum, record) => sum + record.count, 0);
+}
+
+/** Total minutes of sleep from SleepSession records ending in the last 24h ("last night"), summed
+ * across sessions (naps + main sleep). 0 off-Android or with nothing recorded. */
+export async function readTodaySleep(): Promise<number> {
+  if (Platform.OS !== "android") return 0;
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const { records } = await readRecords("SleepSession", {
+    timeRangeFilter: { operator: "between", startTime: since.toISOString(), endTime: new Date().toISOString() },
+  });
+  const totalMs = records.reduce(
+    (sum, record) => sum + (new Date(record.endTime).getTime() - new Date(record.startTime).getTime()),
+    0,
+  );
+  return Math.round(totalMs / 60000);
 }
 
 export interface HcExerciseSessionSummary {

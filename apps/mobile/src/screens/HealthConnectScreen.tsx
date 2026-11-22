@@ -51,7 +51,7 @@ export function HealthConnectScreen({ route }: Props) {
   }, [refresh]);
 
   const handleToggle = useCallback(
-    async (key: keyof HcSettings, kind: "steps" | "exercise" | "weight" | "write_exercise", enabled: boolean) => {
+    async (key: keyof HcSettings, kind: "steps" | "exercise" | "weight" | "sleep" | "write_exercise", enabled: boolean) => {
       if (!settings) return;
       if (enabled) {
         const granted = await requestHcPermissions([kind]);
@@ -123,6 +123,12 @@ export function HealthConnectScreen({ route }: Props) {
               label="Weight"
               value={settings.weight}
               onChange={(v) => void handleToggle("weight", "weight", v)}
+              style={{ marginTop: space.md }}
+            />
+            <ToggleRow
+              label="Sleep"
+              value={settings.sleep}
+              onChange={(v) => void handleToggle("sleep", "sleep", v)}
               style={{ marginTop: space.md }}
             />
           </Card>

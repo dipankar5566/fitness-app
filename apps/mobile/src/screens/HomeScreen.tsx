@@ -36,6 +36,7 @@ import {
   importHcWeights,
   loadHcSettings,
   readRecentExerciseSessions,
+  readTodaySleep,
   readTodaySteps,
   WEIGHT_IMPORT_LOOKBACK_DAYS,
   type HcExerciseSessionSummary,
@@ -87,6 +88,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [streak, setStreak] = useState<ReturnType<typeof computeLoggingStreak> | null>(null);
   const [hcSteps, setHcSteps] = useState<number | null>(null);
   const [hcExercise, setHcExercise] = useState<HcExerciseSessionSummary | null>(null);
+  const [hcSleepMin, setHcSleepMin] = useState<number | null>(null);
   const [waterMl, setWaterMl] = useState(0);
   const [waterGoal, setWaterGoal] = useState(() => waterGoalMl(null));
   const [weightReadings, setWeightReadings] = useState<LocalBodyMetric[]>([]);
@@ -148,6 +150,9 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
       if (hcSettings.exercise) {
         const sessions = await readRecentExerciseSessions(1);
         setHcExercise(sessions[0] ?? null);
+      }
+      if (hcSettings.sleep) {
+        setHcSleepMin(await readTodaySleep());
       }
       if (hcSettings.weight) {
         const since = new Date(Date.now() - WEIGHT_IMPORT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -312,11 +317,16 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
             </Card>
           ) : null}
 
-          {hcSteps !== null || hcExercise !== null ? (
+          {hcSteps !== null || hcExercise !== null || hcSleepMin !== null ? (
             <Card style={{ marginTop: space.lg }}>
               <SectionHeader title="Today's activity" />
               {hcSteps !== null ? (
                 <AppText variant="bodyMedium" numbers>{hcSteps.toLocaleString()} steps</AppText>
+              ) : null}
+              {hcSleepMin !== null ? (
+                <AppText variant="bodyMedium" numbers style={{ marginTop: space.xxs }}>
+                  {Math.floor(hcSleepMin / 60)}h {hcSleepMin % 60}m sleep
+                </AppText>
               ) : null}
               {hcExercise ? (
                 <AppText variant="caption" color={colors.textSecondary} style={{ marginTop: space.xxs }}>
