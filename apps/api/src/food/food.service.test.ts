@@ -62,11 +62,14 @@ describe("FoodService", () => {
   });
 
   describe("search", () => {
+    // Call order is: search_foods(), then the alias lookup (0006_food_alias.sql), then the
+    // diet-class lookup. Tests that don't exercise aliases mock an empty alias result in slot 2.
     it("returns results unfiltered, with dietClass attached, when no dietType is given", async () => {
       db.query
         .mockResolvedValueOnce({
           rows: [{ food_id: 1, code: "ASC001", name: "Chicken biryani", food_type: "recipe", score: 1 }],
         })
+        .mockResolvedValueOnce({ rows: [] }) // no alias hits
         .mockResolvedValueOnce({ rows: [{ food_code: "ASC001", diet_class: "non_veg", jain_ok: null }] });
 
       const results = await service.search("biryani", 20);
@@ -86,6 +89,7 @@ describe("FoodService", () => {
             { food_id: 3, code: "ASC003", name: "Mystery biryani", food_type: "recipe", score: 0.8 },
           ],
         })
+        .mockResolvedValueOnce({ rows: [] }) // no alias hits
         .mockResolvedValueOnce({
           rows: [
             { food_code: "ASC001", diet_class: "non_veg", jain_ok: null },
@@ -100,11 +104,47 @@ describe("FoodService", () => {
     });
 
     it("over-fetches when filtering by dietType, then slices to the requested limit", async () => {
-      db.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
+      db.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] });
 
       await service.search("rice", 5, "vegan");
 
       expect(db.query).toHaveBeenCalledWith("SELECT * FROM search_foods($1, $2)", ["rice", 20]);
+    });
+
+    it("surfaces an alias-only match that search_foods() misses, and ranks an exact alias first", async () => {
+      // "chawal" is not in indb's food_name, so search_foods() returns nothing; the alias table
+      // maps it to rice. An exact alias match scores 1.5, above the fuzzy range.
+      db.query
+        .mockResolvedValueOnce({ rows: [] }) // search_foods() miss
+        .mockResolvedValueOnce({
+          rows: [{ food_id: 7, code: "L002", name: "Rice, raw", food_type: "ingredient", score: 1.5 }],
+        })
+        .mockResolvedValueOnce({ rows: [{ food_code: "L002", diet_class: "vegan", jain_ok: true }] });
+
+      const results = await service.search("chawal", 20);
+
+      expect(results).toEqual([
+        { food_id: 7, code: "L002", name: "Rice, raw", food_type: "ingredient", score: 1.5, dietClass: "vegan" },
+      ]);
+    });
+
+    it("dedupes a food that both search_foods() and an alias return, keeping the higher score", async () => {
+      db.query
+        .mockResolvedValueOnce({
+          rows: [{ food_id: 7, code: "L002", name: "Rice, raw", food_type: "ingredient", score: 0.4 }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ food_id: 7, code: "L002", name: "Rice, raw", food_type: "ingredient", score: 1.5 }],
+        })
+        .mockResolvedValueOnce({ rows: [] });
+
+      const results = await service.search("rice", 20);
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ code: "L002", score: 1.5 });
     });
   });
 

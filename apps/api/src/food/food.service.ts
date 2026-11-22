@@ -83,13 +83,38 @@ export class FoodService {
    */
   async search(q: string, limit: number, dietType?: DietType): Promise<SearchFoodsRow[]> {
     const overFetchLimit = dietType ? Math.min(limit * 4, 200) : limit;
-    const result = await this.db.query<Omit<SearchFoodsRow, "dietClass">>(
-      "SELECT * FROM search_foods($1, $2)",
-      [q, overFetchLimit],
-    );
 
-    const dietClassByCode = await this.getDietClasses(result.rows.map((row) => row.code));
-    const withDietClass: SearchFoodsRow[] = result.rows.map((row) => ({
+    // indb's own fuzzy search + our app-owned regional-name aliases (0006_food_alias.sql), run
+    // together. search_foods() is issued first so its query shape stays the stable, asserted one.
+    const [builtIn, aliasHits] = await Promise.all([
+      this.db.query<Omit<SearchFoodsRow, "dietClass">>("SELECT * FROM search_foods($1, $2)", [
+        q,
+        overFetchLimit,
+      ]),
+      this.searchAliases(q, overFetchLimit),
+    ]);
+
+    // Dedupe by food code, keeping the higher score. An exact alias match carries a score above
+    // search_foods()'s [0,1] range (see searchAliases), so a known regional name like "chawal"
+    // surfaces its plain ingredient (A014 "Rice...") ahead of fuzzy recipe hits ("Boiled rice").
+    // Score is the primary key; recipe-before-ingredient is only a tiebreaker (search_foods orders
+    // recipe-first unconditionally, but that must not bury a high-scoring alias ingredient match).
+    const byCode = new Map<string, Omit<SearchFoodsRow, "dietClass">>();
+    for (const row of [...builtIn.rows, ...aliasHits]) {
+      const existing = byCode.get(row.code);
+      if (!existing || row.score > existing.score) {
+        byCode.set(row.code, row);
+      }
+    }
+    const merged = [...byCode.values()].sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      return Number(b.food_type === "recipe") - Number(a.food_type === "recipe");
+    });
+
+    const dietClassByCode = await this.getDietClasses(merged.map((row) => row.code));
+    const withDietClass: SearchFoodsRow[] = merged.map((row) => ({
       ...row,
       dietClass: dietClassByCode.get(row.code)?.dietClass ?? null,
     }));
@@ -103,6 +128,33 @@ export class FoodService {
       return isAllowed(dietType, entry?.dietClass ?? null, entry?.jainOk ?? null);
     });
     return filtered.slice(0, limit);
+  }
+
+  /**
+   * Regional-name alias search over app.food_alias (0006_food_alias.sql), joined back to public.food
+   * by code. Same `%`/ILIKE/similarity() shape as indb's search_foods() so results merge cleanly.
+   * An exact (case-insensitive) alias match scores 1.5 - above similarity()'s [0,1] range - so a
+   * curated regional name beats a fuzzy indb match for the same query.
+   */
+  private async searchAliases(q: string, limit: number): Promise<Omit<SearchFoodsRow, "dietClass">[]> {
+    const result = await this.db.query<{
+      food_id: number;
+      code: string;
+      name: string;
+      food_type: string;
+      score: number | string;
+    }>(
+      `SELECT f.id AS food_id, f.code, f.name, f.food_type,
+              max(GREATEST(similarity(a.alias, $1),
+                           CASE WHEN lower(a.alias) = lower($1) THEN 1.5 ELSE 0 END)) AS score
+       FROM app.food_alias a JOIN food f ON f.code = a.food_code
+       WHERE a.alias % $1 OR a.alias ILIKE '%' || $1 || '%'
+       GROUP BY f.id, f.code, f.name, f.food_type
+       ORDER BY score DESC
+       LIMIT $2`,
+      [q, limit],
+    );
+    return result.rows.map((row) => ({ ...row, score: Number(row.score) }));
   }
 
   private async getDietClasses(codes: string[]): Promise<Map<string, DietClassEntry>> {
