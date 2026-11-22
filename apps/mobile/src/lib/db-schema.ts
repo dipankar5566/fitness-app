@@ -1,6 +1,6 @@
 import type { SqlDb } from "./sql-db";
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 /**
  * Local SQLite mirror for offline sync (ARCHITECTURE.md section 3). `food_log` mirrors app.food_log
@@ -166,6 +166,25 @@ export async function migrate(db: SqlDb): Promise<void> {
     // existed, so it's NULL - clearing the sync token forces one full re-pull, and
     // applyRemote's COALESCE backfills food_name onto those rows without disturbing anything else.
     await db.execAsync("DELETE FROM kv WHERE key = 'sync_token'");
+  }
+
+  if (currentVersion < 6) {
+    // water_log mirrors app.water_log (0009), same outbox shape as body_metric. A brand-new table,
+    // so CREATE IF NOT EXISTS is inherently self-healing - no ALTER/backfill dance needed.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS water_log (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        amount_ml REAL NOT NULL,
+        recorded_at TEXT NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        is_dirty INTEGER NOT NULL DEFAULT 1
+      )
+    `);
+    await db.execAsync(
+      "CREATE INDEX IF NOT EXISTS water_log_account_day_idx ON water_log (account_id, recorded_at)",
+    );
   }
 
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);

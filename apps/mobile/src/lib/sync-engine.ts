@@ -20,6 +20,12 @@ import { applyRemote, getDirty, markClean, type RemoteFoodLogRow } from "./food-
 import { getKv, setKv } from "./kv-store";
 import type { SqlDb } from "./sql-db";
 import {
+  applyRemote as applyRemoteWater,
+  getDirty as getDirtyWater,
+  markClean as markWaterClean,
+  type RemoteWaterLog,
+} from "./water-repo";
+import {
   applyRemoteSessions,
   applyRemoteSets,
   getDirtySessions,
@@ -35,9 +41,9 @@ const SYNC_TOKEN_KEY = "sync_token";
 let inFlight: Promise<void> | null = null;
 
 /**
- * Pushes dirty rows across all six syncable tables (food_log, custom_food,
- * custom_food_ingredient, workout_session, workout_set, body_metric), then pulls everything since
- * the last sync token (ARCHITECTURE.md §3).
+ * Pushes dirty rows across all seven syncable tables (food_log, custom_food,
+ * custom_food_ingredient, workout_session, workout_set, body_metric, water_log), then pulls
+ * everything since the last sync token (ARCHITECTURE.md §3).
  * A module-level guard collapses overlapping calls (app start, after a write, foreground) into one
  * run. Network failures are swallowed - rows just stay dirty and go out next time; anything else
  * (a real server error) is reported and rethrown so callers can decide whether to surface it.
@@ -72,6 +78,7 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
   const dirtySessions = await getDirtySessions(db);
   const dirtySets = await getDirtySets(db);
   const dirtyBodyMetrics = await getDirtyBodyMetrics(db);
+  const dirtyWater = await getDirtyWater(db);
 
   if (
     dirtyFoodLog.length === 0 &&
@@ -79,7 +86,8 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
     dirtyIngredients.length === 0 &&
     dirtySessions.length === 0 &&
     dirtySets.length === 0 &&
-    dirtyBodyMetrics.length === 0
+    dirtyBodyMetrics.length === 0 &&
+    dirtyWater.length === 0
   ) {
     return;
   }
@@ -139,6 +147,14 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
           recordedAt: row.recordedAt,
         },
       })),
+      ...dirtyWater.map((row) => ({
+        table: "water_log" as const,
+        op: row.isDeleted ? ("delete" as const) : ("upsert" as const),
+        row: {
+          id: row.id, accountId: row.accountId, isDeleted: row.isDeleted, updatedAt: row.updatedAt,
+          amountMl: row.amountMl, recordedAt: row.recordedAt,
+        },
+      })),
     ],
   });
 
@@ -175,6 +191,11 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
       await markBodyMetricClean(db, row.id, row.updatedAt);
     }
   }
+  for (const row of dirtyWater) {
+    if (appliedIds.has(row.id)) {
+      await markWaterClean(db, row.id, row.updatedAt);
+    }
+  }
 }
 
 async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Promise<void> {
@@ -187,6 +208,7 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
   const sessionRows: RemoteWorkoutSession[] = [];
   const setRows: RemoteWorkoutSet[] = [];
   const bodyMetricRows: RemoteBodyMetric[] = [];
+  const waterRows: RemoteWaterLog[] = [];
 
   for (const change of response.changes) {
     const row = change.row as Record<string, unknown>;
@@ -263,6 +285,15 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
         isDeleted,
         updatedAt: row.updatedAt as string,
       });
+    } else if (change.table === "water_log") {
+      waterRows.push({
+        id: row.id as string,
+        accountId: row.accountId as string,
+        amountMl: row.amountMl as number,
+        recordedAt: row.recordedAt as string,
+        isDeleted,
+        updatedAt: row.updatedAt as string,
+      });
     }
   }
 
@@ -283,6 +314,9 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
   }
   if (bodyMetricRows.length > 0) {
     await applyRemoteBodyMetrics(db, bodyMetricRows);
+  }
+  if (waterRows.length > 0) {
+    await applyRemoteWater(db, waterRows);
   }
   await setKv(db, SYNC_TOKEN_KEY, response.nextSyncToken);
 }
