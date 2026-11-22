@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   calorieRingProgress,
+  DEFAULT_MEAL_SPLIT,
   groupFoodLogByMeal,
   kcalRemaining,
   MEAL_DISPLAY_ORDER,
+  splitMealBudgets,
   sumKcal,
   type SummarizableFoodLogEntry,
 } from "./meal-summary";
@@ -83,5 +85,37 @@ describe("kcalRemaining", () => {
 
   it("is negative once over target - a real 'over budget' fact, not clamped to 0", () => {
     expect(kcalRemaining(2500, 2000)).toBe(-500);
+  });
+});
+
+describe("splitMealBudgets", () => {
+  it("splits so the four meal budgets sum exactly to the rounded daily total", () => {
+    const budgets = splitMealBudgets(2001);
+    const total = MEAL_DISPLAY_ORDER.reduce((sum, meal) => sum + budgets[meal], 0);
+    expect(total).toBe(2001);
+  });
+
+  it("gives lunch the largest default share and snack the smallest", () => {
+    const budgets = splitMealBudgets(2000);
+    expect(budgets.lunch).toBeGreaterThan(budgets.breakfast);
+    expect(budgets.lunch).toBeGreaterThan(budgets.dinner);
+    expect(budgets.snack).toBeLessThan(budgets.breakfast);
+  });
+
+  it("respects a custom split and still sums to the total", () => {
+    const even = { breakfast: 0.25, lunch: 0.25, snack: 0.25, dinner: 0.25 };
+    const budgets = splitMealBudgets(1000, even);
+    expect(budgets.breakfast).toBe(250);
+    expect(MEAL_DISPLAY_ORDER.reduce((s, m) => s + budgets[m], 0)).toBe(1000);
+  });
+
+  it("returns all zeros for a non-positive target", () => {
+    expect(splitMealBudgets(0)).toEqual({ breakfast: 0, lunch: 0, snack: 0, dinner: 0 });
+    expect(splitMealBudgets(-500)).toEqual({ breakfast: 0, lunch: 0, snack: 0, dinner: 0 });
+  });
+
+  it("DEFAULT_MEAL_SPLIT shares sum to 1", () => {
+    const total = MEAL_DISPLAY_ORDER.reduce((sum, meal) => sum + DEFAULT_MEAL_SPLIT[meal], 0);
+    expect(total).toBeCloseTo(1, 10);
   });
 });

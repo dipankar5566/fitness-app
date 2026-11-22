@@ -63,3 +63,40 @@ export function calorieRingProgress(eatenKcal: number, targetKcal: number): numb
 export function kcalRemaining(eatenKcal: number, targetKcal: number): number {
   return Math.round(targetKcal - eatenKcal);
 }
+
+/** Default share of the daily calorie budget per meal (sums to 1). A reasonable Indian-day split -
+ * a modest breakfast, lunch as the largest meal, a light snack, a solid dinner. Tunable. */
+export const DEFAULT_MEAL_SPLIT: Record<MealDisplayType, number> = {
+  breakfast: 0.25,
+  lunch: 0.35,
+  snack: 0.1,
+  dinner: 0.3,
+};
+
+/**
+ * Splits a daily calorie target into a per-meal budget. The four budgets always sum exactly to
+ * round(dailyKcal) - the last meal in MEAL_DISPLAY_ORDER absorbs any rounding remainder so the
+ * parts never drift from the whole. A non-positive target yields all zeros. Pure; drives the
+ * "eaten / budget" line on each Today meal section.
+ */
+export function splitMealBudgets(
+  dailyKcal: number,
+  split: Record<MealDisplayType, number> = DEFAULT_MEAL_SPLIT,
+): Record<MealDisplayType, number> {
+  const out = {} as Record<MealDisplayType, number>;
+  if (dailyKcal <= 0) {
+    for (const meal of MEAL_DISPLAY_ORDER) out[meal] = 0;
+    return out;
+  }
+  const total = Math.round(dailyKcal);
+  let allocated = 0;
+  MEAL_DISPLAY_ORDER.forEach((meal, index) => {
+    if (index < MEAL_DISPLAY_ORDER.length - 1) {
+      out[meal] = Math.round(total * split[meal]);
+      allocated += out[meal];
+    } else {
+      out[meal] = total - allocated; // last meal takes the remainder, keeping the sum exact
+    }
+  });
+  return out;
+}

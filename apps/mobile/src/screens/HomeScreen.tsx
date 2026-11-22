@@ -3,6 +3,7 @@ import {
   computeLoggingStreak,
   groupFoodLogByMeal,
   kcalRemaining,
+  splitMealBudgets,
   sumKcal,
   type MealDisplayType,
 } from "@fitness-app/shared";
@@ -263,6 +264,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const remaining = kcalRemaining(totalKcal, targetKcal);
   const progress = calorieRingProgress(totalKcal, targetKcal);
   const mealGroups = groupFoodLogByMeal(entries);
+  const mealBudgets = splitMealBudgets(targetKcal);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -436,7 +438,13 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
       renderItem={({ item: group }) => (
         <View style={styles.mealSection}>
           <SectionHeader
-            title={`${MEAL_LABELS[group.mealType]}${group.entries.length > 0 ? ` · ${Math.round(group.kcalSubtotal)} kcal` : ""}`}
+            title={`${MEAL_LABELS[group.mealType]}${
+              mealBudgets[group.mealType] > 0
+                ? ` · ${Math.round(group.kcalSubtotal)} / ${mealBudgets[group.mealType]} kcal`
+                : group.entries.length > 0
+                  ? ` · ${Math.round(group.kcalSubtotal)} kcal`
+                  : ""
+            }`}
             action={{ label: "+ Add", onPress: () => navigation.navigate("FoodSearch", { accountId, presetMealType: group.mealType }) }}
           />
           {group.entries.length === 0 ? (
