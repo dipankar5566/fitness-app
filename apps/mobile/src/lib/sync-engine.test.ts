@@ -324,6 +324,23 @@ describe("sync-engine", () => {
     expect((await listRecentFasts(db, "account-1")).map((r) => r.id)).toContain("99999999-0000-0000-0000-000000000002");
   });
 
+  it("notifies sync-settled listeners even when the sync fails offline, and not after unsubscribing", async () => {
+    const { pullSync } = await import("./api");
+    (pullSync as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError("Network request failed"));
+    const { onSyncSettled, syncNow } = await import("./sync-engine");
+    const listener = vi.fn();
+    const unsubscribe = onSyncSettled(listener);
+
+    await syncNow(db, "http://localhost:3001", "token-1");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    await syncNow(db, "http://localhost:3001", "token-1");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it("collapses overlapping calls into a single run", async () => {
     const { pushSync, pullSync } = await import("./api");
     (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({ changes: [], nextSyncToken: "t1" });

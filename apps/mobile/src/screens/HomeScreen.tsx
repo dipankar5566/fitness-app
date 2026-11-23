@@ -36,6 +36,7 @@ import {
   type LocalBodyMetric,
 } from "../lib/body-metric-repo";
 import {
+  GLASS_ML,
   insert as insertWater,
   softDeleteLatestBetween as removeLatestWater,
   totalMlBetween as totalWaterMlBetween,
@@ -77,8 +78,6 @@ function todayBoundsIso(): { startIso: string; endIso: string } {
   const endIso = new Date(new Date(startIso).getTime() + 24 * 60 * 60 * 1000).toISOString();
   return { startIso, endIso };
 }
-
-const GLASS_ML = 250;
 
 const MEAL_LABELS: Record<MealDisplayType, string> = {
   breakfast: "Breakfast",

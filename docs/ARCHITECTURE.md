@@ -41,7 +41,7 @@ infra/           Dockerfile(s), docker-compose.yml (postgres + api), CI config
   target_fat_g, training_day_adjustment_pct, started_at, is_active
 - **food_log**: id (uuid, client-generated), account_id, food_id (→ indb.food OR app.packaged_food OR
   app.custom_food via food_source enum + food_ref), quantity, unit, meal_type, logged_at, source
-  (manual/ai_text/ai_photo/barcode), is_estimate, is_deleted, is_synced, updated_at — **mirrors INDB's
+  (manual/ai_text/ai_photo/barcode/ai_plan), is_estimate, is_deleted, is_synced, updated_at — **mirrors INDB's
   proven sync shape**: client/local id, soft delete, dirty flag
 - **packaged_food**: barcode, name, brand, nutrients jsonb, source ('off'|'user_submitted'), review_status
   — **separate table/schema from `indb`**: Open Food Facts is ODbL (share-alike); keeping it out of the
@@ -56,6 +56,12 @@ infra/           Dockerfile(s), docker-compose.yml (postgres + api), CI config
 - **chat_message**: account_id, role, content, tool_calls jsonb, created_at
 - **ai_usage**: account_id, feature, tokens/cost, created_at — cost ledger for quota enforcement
 - **consent_record**: account_id, purpose, granted_at, revoked_at, policy_version — DPDP audit trail
+- **water_log** (0009), **fasting_log** (0011): syncable (standard four-column shape + `server_updated_at`);
+  fasting_log is one row per fast (`started_at`, nullable `ended_at`, `target_minutes` CHECK 12h-23h)
+- **coach_daily_insight** (0010), **meal_plan** (0012): server-generated, cached one row per account per day
+  (`payload jsonb` = the validated plan), read-only on the client — not syncable
+- Gamification (points/levels/badges) has **no table**: derived on-device from the synced tables above
+  (`packages/shared/src/achievements.ts`), like the logging streak
 
 ## 3. Offline-first sync (pattern proven in the HealthifyMe teardown, reimplemented independently)
 - Every syncable table: `id` is a client-generated UUID (works offline), `server_id` not needed since id
@@ -91,9 +97,14 @@ interface AiProvider {
 ```
 - One interface, swappable implementation (Anthropic/OpenAI/Gemini/local) — **decided: OpenAI**
   (`gpt-4o-mini` for parsing, `gpt-4o` reserved for the coach; PRD §9). The interface above is the
-  full eventual shape; the real `AiProvider` (`apps/api/src/ai/ai-provider.interface.ts`) only has
-  `parseMealText` so far - `parseMealImage`/`chat`/`generatePlan` get added as those M4/M5 roadmap
-  items are actually built, not stubbed ahead of time.
+  full eventual shape; the real `AiProvider` (`apps/api/src/ai/ai-provider.interface.ts`) grows one
+  method per built feature: `parseMealText`/`parseMealImage` (M4), `chat` (M5), and `generateMealPlan`
+  (Phase E - the meal half of `generatePlan`; a workout-plan half isn't built yet).
+- `generateMealPlan` returns food names + grams only. `MealPlanService` resolves each to an indb food
+  (diet-filtered search, diet-unverified foods skipped), re-costs it from our own nutrients, scales
+  portions toward the kcal target and validates (±5 % kcal, protein ≥ 85 % of target —
+  `packages/shared/src/meal-plan.ts`) before caching or showing it; one corrective retry, else 422.
+  A target below the safe calorie floor is refused before any AI call.
 - `ParsedMeal` items are always resolved to a `food_id` in our DB (search-then-match, not free text) or
   explicitly flagged `is_estimate`; the gateway never writes to `food_log` directly — it returns a draft the
   app shows for confirmation (mirrors the "confirm before save" pattern from the teardown's Snap review step).

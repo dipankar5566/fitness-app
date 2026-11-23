@@ -1,5 +1,8 @@
 import type { SqlDb } from "./sql-db";
 
+/** One "glass" - the step size of the Today water card and the widget's "+ Glass" button. */
+export const GLASS_ML = 250;
+
 export interface LocalWaterLog {
   id: string;
   accountId: string;

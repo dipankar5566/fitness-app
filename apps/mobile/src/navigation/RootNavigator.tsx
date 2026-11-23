@@ -1,7 +1,11 @@
 import type { MealType } from "@fitness-app/shared";
-import { NavigationContainer } from "@react-navigation/native";
+import { createNavigationContainerRef, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useCallback, useEffect, useRef } from "react";
+import { Linking } from "react-native";
 import type { Exercise } from "../lib/api";
+import { loadGuestSession } from "../lib/auth-storage";
+import { parseDeepLink, type DeepLinkTarget } from "../lib/deep-links";
 import { MainTabs } from "./MainTabs";
 import { BarcodeScanScreen } from "../screens/BarcodeScanScreen";
 import { AchievementsScreen } from "../screens/AchievementsScreen";
@@ -63,9 +67,59 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+/** Screens a deep link must wait behind - the guest session/onboarding hasn't resolved yet. */
+const DEEP_LINK_BLOCKING_ROUTES = new Set<string>(["GuestLoading", "Onboarding"]);
+
+/**
+ * Widget deep links (lib/deep-links.ts). A link can arrive before the navigator is ready or while
+ * GuestLoading is still resolving the session (cold start from the widget), so it's held as pending
+ * and flushed on onReady/onStateChange once a real screen is showing - then navigated with the
+ * session's accountId, which the URL itself can't carry.
+ */
+function useWidgetDeepLinks() {
+  const pending = useRef<DeepLinkTarget | null>(null);
+
+  const flush = useCallback(async () => {
+    const target = pending.current;
+    if (!target || !navigationRef.isReady()) return;
+    const current = navigationRef.getCurrentRoute()?.name;
+    if (!current || DEEP_LINK_BLOCKING_ROUTES.has(current)) return;
+    const session = await loadGuestSession();
+    if (!session || pending.current !== target) return;
+    pending.current = null;
+    if (target === "food_search") {
+      navigationRef.navigate("FoodSearch", { accountId: session.accountId });
+    } else {
+      navigationRef.navigate("Home", { accountId: session.accountId });
+    }
+  }, []);
+
+  useEffect(() => {
+    const receive = (url: string | null | undefined) => {
+      const target = parseDeepLink(url);
+      if (target) {
+        pending.current = target;
+        void flush();
+      }
+    };
+    void Linking.getInitialURL().then(receive);
+    const subscription = Linking.addEventListener("url", ({ url }) => receive(url));
+    return () => subscription.remove();
+  }, [flush]);
+
+  return flush;
+}
+
 export function RootNavigator() {
+  const flushDeepLink = useWidgetDeepLinks();
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => void flushDeepLink()}
+      onStateChange={() => void flushDeepLink()}
+    >
       <Stack.Navigator
         initialRouteName="GuestLoading"
         screenOptions={{

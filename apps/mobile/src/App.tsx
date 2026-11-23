@@ -6,9 +6,10 @@ import { loadGuestSession } from "./lib/auth-storage";
 import { getDatabase } from "./lib/db";
 import { API_URL } from "./lib/env";
 import { applyReminderSchedule, loadReminderSettings } from "./lib/reminders";
-import { syncNow } from "./lib/sync-engine";
+import { onSyncSettled, syncNow } from "./lib/sync-engine";
 import { RootNavigator } from "./navigation/RootNavigator";
 import { useInterFonts } from "./theme";
+import { refreshTodayWidget } from "./widget/refresh";
 
 async function triggerSync(): Promise<void> {
   const [db, session] = await Promise.all([getDatabase(), loadGuestSession()]);
@@ -30,6 +31,10 @@ export default function App() {
       await applyReminderSchedule(await loadReminderSettings(db));
     });
   }, []);
+
+  // Every local write triggers a sync, so refreshing the home-screen widget after each sync attempt
+  // keeps it current without each screen having to know the widget exists.
+  useEffect(() => onSyncSettled(refreshTodayWidget), []);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {

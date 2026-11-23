@@ -60,7 +60,12 @@ a cached daily-insight card. Built on our own licensed data only — their encry
 used. See CLAUDE.md's "HealthifyMe-informed feature expansion" section.
 
 ## Post-beta (Weeks 13–24, not blocking beta)
-Voice meal logging · social (friends, gym groups, feed) · AI-generated weekly workout + meal plans ·
+**Phase E, built early (clean-room, HealthifyMe-informed):** intermittent-fasting timer (`fasting_log`,
+the 8th syncable table, capped at 23h) · gamification (points/levels/badges derived on-device, nothing
+rewards eating less) · AI sample-day meal plan validated against targets (±5 % kcal) · Android
+home-screen widget (kcal left + water, "Log food" deep link, one-tap "+ Glass"). See CLAUDE.md.
+
+Voice meal logging · social (friends, gym groups, feed) · AI-generated weekly workout plans ·
 restaurant-chain dish database expansion · revenue model implementation · iOS · regional-language UI ·
 IFCT 2017 integration (pending NIN permission) · advanced analytics dashboards.
 

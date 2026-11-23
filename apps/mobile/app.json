@@ -2,6 +2,7 @@
   "expo": {
     "name": "Fitness",
     "slug": "fitness-app",
+    "scheme": "fitness",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -33,6 +34,24 @@
       "expo-font",
       "expo-notifications",
       "react-native-health-connect",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "TodaySummary",
+              "label": "Today",
+              "description": "Calories left and water for today, with quick logging",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
       [
         "expo-build-properties",
         {

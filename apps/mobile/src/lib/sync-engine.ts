@@ -46,6 +46,29 @@ const SYNC_TOKEN_KEY = "sync_token";
 
 let inFlight: Promise<void> | null = null;
 
+type SyncSettledListener = () => void | Promise<void>;
+const settledListeners = new Set<SyncSettledListener>();
+
+/**
+ * Registers a callback run after every sync attempt settles - success, offline, or failure alike,
+ * since local writes are already on disk either way (App.tsx uses this to refresh the home-screen
+ * widget). Listener errors are swallowed so a listener can never break sync. Returns an unsubscribe.
+ */
+export function onSyncSettled(listener: SyncSettledListener): () => void {
+  settledListeners.add(listener);
+  return () => {
+    settledListeners.delete(listener);
+  };
+}
+
+function notifySettled(): void {
+  for (const listener of settledListeners) {
+    void Promise.resolve()
+      .then(listener)
+      .catch(() => undefined);
+  }
+}
+
 /**
  * Pushes dirty rows across all eight syncable tables (food_log, custom_food,
  * custom_food_ingredient, workout_session, workout_set, body_metric, water_log, fasting_log), then pulls
@@ -58,6 +81,7 @@ export function syncNow(db: SqlDb, apiUrl: string, accessToken: string): Promise
   if (!inFlight) {
     inFlight = run(db, apiUrl, accessToken).finally(() => {
       inFlight = null;
+      notifySettled();
     });
   }
   return inFlight;

@@ -450,8 +450,46 @@ UI cards are typecheck/lint-clean with on-device verification still pending.
 - **Coach upgrades.** `COACH_PROMPT_SUGGESTIONS` chips on an empty thread; `app.coach_daily_insight`
   (`0010`) + `CoachService.dailyInsight` + `GET /coach/daily-insight` - grounded, guardrailed,
   cached one AI call/account/day, shown as a tappable Today card. (SSE streaming deferred.)
-- **Deferred to post-beta (confirmed wanted):** AI diet-plan generator, intermittent fasting,
-  gamification, home-screen widget, and deeper open-dataset imports (USDA/OFF-India/IFCT).
+- **Deferred to its own data-pipeline phase:** deeper open-dataset imports (USDA/OFF-India/IFCT).
+  AI *workout*-plan generation is also not built (the 4 built-in programs cover workouts).
+
+**Phase E (post-beta features, built early, same clean-room rules).** Four sub-phases, one commit each:
+- **E1 Intermittent fasting.** `app.fasting_log` (`0011`) is the **eighth syncable table** (adapter in
+  `sync.service.ts`, mobile `db-schema.ts` v7 + `fasting-repo.ts` outbox + `sync-engine` wiring). Pure
+  window math in `packages/shared/src/fasting.ts`. Safety: presets stop at 20h and the CHECK/Zod schema
+  cap a fast at 23h (no multi-day fasts); `fastingCaution` replaces the "Start fast" button with
+  `ED_SIGNAL_RESPONSE` when a recent *logged* day was under 800 kcal (unlogged days don't count).
+  `FastingCard` on Today; a one-off "fast complete" notification - `applyReminderSchedule` now cancels
+  only daily reminders by id instead of `cancelAll...`, so it no longer wipes that pending alert.
+- **E2 Gamification.** `packages/shared/src/achievements.ts` - 14 badges, points, levels, all **derived
+  on-device** (no table, like `streak.ts`); badges use the *longest-ever* streak so they never re-lock,
+  and "personal best" excludes an exercise's first session. A test pins that no badge is calorie- or
+  restriction-based. `achievements-repo.ts` gathers inputs; the "seen" set lives in kv
+  (`ACHIEVEMENTS_SEEN_KEY`). `AchievementsScreen` (Me tab) + Lv chip and one-time new-badge banner on Today.
+- **E3 AI sample-day meal plan.** `AiProvider.generateMealPlan` (gpt-4o-mini, usage `plan_generate`) ->
+  `apps/api/src/meal-plan/`'s `MealPlanService`: quota check, below-calorie-floor targets refused before
+  any AI call, names resolved via diet-filtered `FoodService.search` (diet-*unverified* foods skipped for
+  non-`non_veg` diets - a plan is a recommendation, not a user's own pick), re-costed from our own
+  per-100g nutrients, scaled and validated (±5 % kcal, protein ≥ 85 %; `packages/shared/src/meal-plan.ts`),
+  one corrective retry, else 422. Cached per account/day in `app.meal_plan` (`0012`, which also adds
+  `food_log.source = 'ai_plan'`). `GET /meal-plan/today`, `POST /meal-plan/generate`. `MealPlanScreen`
+  logs a meal via the normal outbox and swaps a food (FoodSearch `swapPlanItem` mode) at the same kcal.
+  Known limitation: inherits `search_foods()`'s top-1 fuzzy matching ("Curd" -> "Curd dip", "Moong dal"
+  -> raw dal) - totals stay valid because everything is re-costed, but Swap exists for odd picks.
+- **E4 Android home-screen widget.** `react-native-android-widget` 0.26 (config plugin in `app.json`,
+  `scheme: "fitness"`). `src/widget/`: `TodayWidget` (kcal left + water, "Log food" `OPEN_URI` deep link,
+  one-tap "+ Glass" custom action), a headless `widget-task-handler` registered in `index.ts` that reads
+  only the local SQLite mirror (`widget-data.ts`), and `refreshTodayWidget`, run after every sync attempt
+  via `sync-engine.ts`'s new `onSyncSettled` listener (every write already triggers a sync). Deep links
+  are parsed by hand (`lib/deep-links.ts`) and flushed in `RootNavigator` once the guest session is known,
+  since the URL can't carry the `accountId` every route needs.
+
+Verified: lint/typecheck/tests green at every step; E1 curl push/pull/stale/soft-delete + psql CHECK
+rejection; E3 against the real API/`indb` DB for the 401/400/422-floor/cache paths, the `ai_plan` CHECK,
+and diet-filtered resolution of typical plan foods. **Not yet verified:** a real OpenAI meal-plan
+generation (no `OPENAI_API_KEY` on this machine), and the on-device pass for E1/E2/E4 (the native
+build with the widget plugin succeeded and installed on `fitness_app_avd`, but a stale Metro on 8081 left
+over from an earlier session hung serving the bundle and needs a manual restart).
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
