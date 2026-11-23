@@ -67,4 +67,29 @@ describe("loadWidgetSnapshot", () => {
     expect(after.eatenKcal).toBe(500);
     expect(after.kcalLeft).toBe(1700);
   });
+
+  it("subtracts unrounded kcal, matching the Today ring (34.5 eaten -> 2593 left of 2627)", async () => {
+    await setKv(db, CACHED_GOAL_KEY, JSON.stringify({ target_kcal: "2627" }));
+    await insertFoodLog(db, {
+      id: "f3",
+      accountId: "a",
+      foodSource: "indb",
+      foodRef: "X",
+      quantity: 1,
+      unit: "idli",
+      mealType: "lunch",
+      loggedAt: "2026-11-23T12:00:00.000Z",
+      source: "manual",
+      isEstimate: false,
+      isDeleted: false,
+      updatedAt: "2026-11-23T12:00:00.000Z",
+      macros: { kcal: 34.5, proteinG: 1.2, fatG: 0.1, carbG: 7.1 },
+      foodName: null,
+    });
+
+    const snapshot = await loadWidgetSnapshot(db, "a", NOW);
+
+    expect(snapshot.eatenKcal).toBe(35);
+    expect(snapshot.kcalLeft).toBe(2593);
+  });
 });

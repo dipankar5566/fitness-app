@@ -31,7 +31,9 @@ export function dayBounds(now: Date): { date: string; startIso: string; endIso: 
  */
 export async function loadWidgetSnapshot(db: SqlDb, accountId: string, now: Date = new Date()): Promise<WidgetSnapshot> {
   const { date, startIso, endIso } = dayBounds(now);
-  const eatenKcal = Math.round(sumKcal(await listByLocalDay(db, accountId, date)));
+  // Unrounded for the subtraction, exactly as HomeScreen does - rounding first can put the widget a
+  // kcal away from the Today ring (e.g. 34.5 eaten: 2592 vs 2593 left).
+  const rawEatenKcal = sumKcal(await listByLocalDay(db, accountId, date));
 
   let targetKcal: number | null = null;
   const cachedGoal = await getKv(db, CACHED_GOAL_KEY);
@@ -47,9 +49,9 @@ export async function loadWidgetSnapshot(db: SqlDb, accountId: string, now: Date
 
   const latestWeight = await getLatestBodyMetric(db, accountId, "weight_kg");
   return {
-    eatenKcal,
+    eatenKcal: Math.round(rawEatenKcal),
     targetKcal,
-    kcalLeft: targetKcal === null ? null : kcalRemaining(eatenKcal, targetKcal),
+    kcalLeft: targetKcal === null ? null : kcalRemaining(rawEatenKcal, targetKcal),
     waterMl: await totalMlBetween(db, accountId, startIso, endIso),
     waterGoalMl: waterGoalMl(latestWeight?.value ?? null),
   };

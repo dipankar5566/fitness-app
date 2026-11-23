@@ -486,10 +486,15 @@ UI cards are typecheck/lint-clean with on-device verification still pending.
 
 Verified: lint/typecheck/tests green at every step; E1 curl push/pull/stale/soft-delete + psql CHECK
 rejection; E3 against the real API/`indb` DB for the 401/400/422-floor/cache paths, the `ai_plan` CHECK,
-and diet-filtered resolution of typical plan foods. **Not yet verified:** a real OpenAI meal-plan
-generation (no `OPENAI_API_KEY` on this machine), and the on-device pass for E1/E2/E4 (the native
-build with the widget plugin succeeded and installed on `fitness_app_avd`, but a stale Metro on 8081 left
-over from an earlier session hung serving the bundle and needs a manual restart).
+and diet-filtered resolution of typical plan foods. **On a real emulator** (`fitness_app_avd`, native
+rebuild with the widget plugin): onboarding -> Today shows the Lv chip and fasting card; starting a 16:8
+fast ticks live and lands in `app.fasting_log` via sync; logging a food adds the streak chip and the
+Achievements screen shows the right points/progress; the widget is placeable from the launcher, shows
+live kcal/water, "+ Glass" logs water headlessly (synced on next app open, psql-confirmed) and "Log food"
+deep-links into FoodSearch. That pass caught one real bug, fixed: the widget rounded "eaten" before
+subtracting, so it could show 1 kcal off the Today ring. **Not yet verified:** a real OpenAI meal-plan
+generation (no `OPENAI_API_KEY` on this machine). Emulator networking note: `adb reverse` didn't work on
+this AVD - the host is reachable as `10.0.2.2`, so start Metro with `EXPO_PUBLIC_API_URL=http://10.0.2.2:<api port>`.
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
