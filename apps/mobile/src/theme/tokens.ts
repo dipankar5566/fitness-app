@@ -78,7 +78,7 @@ export const lightColors: ThemeColors = {
   // Text
   text: "#1A1714",
   textSecondary: "#6E6760",
-  textTertiary: "#A29B94",
+  textTertiary: "#8C857C",
   textOnPrimary: "#FFFFFF",
 
   // State
