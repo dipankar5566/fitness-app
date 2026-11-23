@@ -8,3 +8,4 @@ export * from "./meal-summary.ts";
 export * from "./streak.ts";
 export * from "./food-relevance.ts";
 export * from "./fasting.ts";
+export * from "./achievements.ts";

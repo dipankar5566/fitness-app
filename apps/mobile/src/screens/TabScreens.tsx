@@ -195,6 +195,13 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
 
       <SectionHeader title="More" style={{ marginTop: space.xxl }} />
       <Card>
+        <ListRow
+          icon="trophy-outline"
+          title="Achievements"
+          subtitle="Level, points & badges"
+          onPress={() => navigation.navigate("Achievements", { accountId })}
+        />
+        <Divider />
         <ListRow icon="notebook-outline" title="My foods" onPress={() => navigation.navigate("MyFoods", { accountId })} />
         <Divider />
         <ListRow icon="calendar-check-outline" title="Programs" onPress={() => navigation.navigate("Programs", { accountId })} />

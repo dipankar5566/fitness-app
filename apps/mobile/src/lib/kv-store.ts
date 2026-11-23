@@ -20,6 +20,9 @@ export const REMINDER_SETTINGS_KEY = "reminder_settings";
 // write); HomeScreen reads it to decide whether to show the "Today's activity" card, and
 // WorkoutSessionScreen reads it to decide whether to write an ended session to Health Connect.
 export const HC_SETTINGS_KEY = "health_connect_settings";
+// Badge ids already shown as a "new achievement" banner on this device (achievements-repo.ts).
+// Per-device UI state, so kv rather than a synced table - badges themselves are derived, not stored.
+export const ACHIEVEMENTS_SEEN_KEY = "achievements_seen";
 
 export async function getKv(db: SqlDb, key: string): Promise<string | null> {
   const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key]);

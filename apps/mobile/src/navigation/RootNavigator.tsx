@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { Exercise } from "../lib/api";
 import { MainTabs } from "./MainTabs";
 import { BarcodeScanScreen } from "../screens/BarcodeScanScreen";
+import { AchievementsScreen } from "../screens/AchievementsScreen";
 import { CoachChatScreen } from "../screens/CoachChatScreen";
 import { CreateCustomFoodScreen } from "../screens/CreateCustomFoodScreen";
 import { ExerciseDetailScreen } from "../screens/ExerciseDetailScreen";
@@ -55,6 +56,7 @@ export type RootStackParamList = {
   CoachChat: { accountId: string };
   Reminders: { accountId: string };
   HealthConnect: { accountId: string };
+  Achievements: { accountId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -134,6 +136,7 @@ export function RootNavigator() {
         <Stack.Screen name="CoachChat" component={CoachChatScreen} options={{ title: "Coach" }} />
         <Stack.Screen name="Reminders" component={RemindersScreen} options={{ title: "Reminders" }} />
         <Stack.Screen name="HealthConnect" component={HealthConnectScreen} options={{ title: "Health Connect" }} />
+        <Stack.Screen name="Achievements" component={AchievementsScreen} options={{ title: "Achievements" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

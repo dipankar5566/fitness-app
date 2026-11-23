@@ -5,6 +5,7 @@ import {
   kcalRemaining,
   splitMealBudgets,
   sumKcal,
+  type AchievementSummary,
   type DietType,
   type MealDisplayType,
 } from "@fitness-app/shared";
@@ -26,6 +27,7 @@ import {
   type FoodSearchResult,
   type GetProfileResponse,
 } from "../lib/api";
+import { getNewlyUnlocked, loadAchievements, markBadgesSeen } from "../lib/achievements-repo";
 import { loadGuestSession } from "../lib/auth-storage";
 import {
   getLatest as getLatestBodyMetric,
@@ -107,10 +109,27 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [suggestions, setSuggestions] = useState<Partial<Record<MealDisplayType, FoodSearchResult[]>>>({});
   const [coachInsight, setCoachInsight] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState(0);
+  const [level, setLevel] = useState<number | null>(null);
+  const [newBadges, setNewBadges] = useState<AchievementSummary["badges"]>([]);
 
   const loadEntries = useCallback(async (db: SqlDb) => {
     setEntries(await listByLocalDay(db, accountId, todayDate()));
   }, [accountId]);
+
+  // Level chip + "new badge" banner - derived from the local mirror (achievements-repo.ts), cheap
+  // enough to recompute on every focus and after the fasting card writes.
+  const loadAchievementState = useCallback(async () => {
+    const db = await getDatabase();
+    const summary = await loadAchievements(db, accountId);
+    setLevel(summary.level);
+    setNewBadges(await getNewlyUnlocked(db, summary));
+  }, [accountId]);
+
+  const dismissNewBadges = useCallback(async () => {
+    const db = await getDatabase();
+    await markBadgesSeen(db, newBadges.map((badge) => badge.id));
+    setNewBadges([]);
+  }, [newBadges]);
 
   const loadWater = useCallback(async (db: SqlDb) => {
     const { startIso, endIso } = todayBoundsIso();
@@ -273,8 +292,9 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   useFocusEffect(
     useCallback(() => {
       void refresh();
+      void loadAchievementState();
       setFocusKey((key) => key + 1);
-    }, [refresh]),
+    }, [refresh, loadAchievementState]),
   );
 
   const handleDelete = useCallback(
@@ -324,14 +344,28 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
                   {new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
                 </AppText>
               </View>
-              {streak && streak.length > 0 ? (
-                <View style={styles.streakChip}>
-                  <MaterialCommunityIcons name="fire" size={16} color={colors.accent} />
-                  <AppText variant="captionMedium" numbers color={colors.accent} style={{ marginLeft: 2 }}>
-                    {streak.length}
-                  </AppText>
-                </View>
-              ) : null}
+              <View style={{ flexDirection: "row", gap: space.xs }}>
+                {level !== null ? (
+                  <Pressable
+                    style={[styles.streakChip, { backgroundColor: colors.primaryTonal }]}
+                    onPress={() => navigation.navigate("Achievements", { accountId })}
+                    accessibilityLabel={`Level ${level}, view achievements`}
+                  >
+                    <MaterialCommunityIcons name="trophy-outline" size={16} color={colors.primary} />
+                    <AppText variant="captionMedium" numbers color={colors.primary} style={{ marginLeft: 2 }}>
+                      Lv {level}
+                    </AppText>
+                  </Pressable>
+                ) : null}
+                {streak && streak.length > 0 ? (
+                  <View style={styles.streakChip}>
+                    <MaterialCommunityIcons name="fire" size={16} color={colors.accent} />
+                    <AppText variant="captionMedium" numbers color={colors.accent} style={{ marginLeft: 2 }}>
+                      {streak.length}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
             </View>
             {streak?.freezeUsedThisWeek ? (
               <AppText variant="micro" color={colors.textTertiary} style={{ marginTop: space.xs }}>
@@ -339,6 +373,24 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
               </AppText>
             ) : null}
           </View>
+
+          {newBadges.length > 0 ? (
+            <Card style={[styles.badgeBanner, { marginBottom: space.lg }]}>
+              <MaterialCommunityIcons name="trophy" size={24} color={colors.accent} />
+              <Pressable
+                style={{ flex: 1, marginLeft: space.md }}
+                onPress={() => navigation.navigate("Achievements", { accountId })}
+              >
+                <AppText variant="bodyMedium">
+                  {newBadges.length === 1 ? `New badge: ${newBadges[0].title}` : `${newBadges.length} new badges`}
+                </AppText>
+                <AppText variant="caption" color={colors.textSecondary}>
+                  {newBadges.length === 1 ? newBadges[0].description : newBadges.map((b) => b.title).join(", ")}
+                </AppText>
+              </Pressable>
+              <IconButton icon="close" onPress={() => void dismissNewBadges()} />
+            </Card>
+          ) : null}
 
           {goal ? (
             <Card style={styles.heroCard}>
@@ -412,7 +464,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
             </AppText>
           </Card>
 
-          <FastingCard accountId={accountId} refreshKey={focusKey} />
+          <FastingCard accountId={accountId} refreshKey={focusKey} onChange={() => void loadAchievementState()} />
 
           <Card style={{ marginTop: space.lg }}>
             <View style={styles.waterHeader}>
@@ -594,6 +646,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentTonal,
   },
   heroCard: { alignItems: "center", marginTop: space.sm },
+  badgeBanner: { flexDirection: "row", alignItems: "center", backgroundColor: colors.accentTonal },
   macroBars: { width: "100%", gap: space.sm, marginTop: space.lg },
   quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
   waterHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

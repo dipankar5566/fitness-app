@@ -12,3 +12,4 @@ export * from "./meal-summary.js";
 export * from "./streak.js";
 export * from "./food-relevance.js";
 export * from "./fasting.js";
+export * from "./achievements.js";
