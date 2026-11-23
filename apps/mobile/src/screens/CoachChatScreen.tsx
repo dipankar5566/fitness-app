@@ -1,7 +1,7 @@
-import { MEDICAL_DISCLAIMER } from "@fitness-app/shared";
+import { COACH_PROMPT_SUGGESTIONS, MEDICAL_DISCLAIMER } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
 import { AppText, Card, IconButton, TextField } from "../components/ui";
 import {
   AiQuotaExceededError,
@@ -59,8 +59,8 @@ export function CoachChatScreen({ route }: Props) {
     })();
   }, []);
 
-  const handleSend = useCallback(async () => {
-    const text = draft.trim();
+  const send = useCallback(async (raw: string) => {
+    const text = raw.trim();
     if (!text || isSending) return;
 
     const session = await loadGuestSession();
@@ -92,7 +92,9 @@ export function CoachChatScreen({ route }: Props) {
       setIsSending(false);
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     }
-  }, [draft, isSending]);
+  }, [isSending]);
+
+  const handleSend = useCallback(() => void send(draft), [send, draft]);
 
   return (
     <KeyboardAvoidingView
@@ -120,6 +122,18 @@ export function CoachChatScreen({ route }: Props) {
               <AppText variant="body" color={colors.textSecondary} center>
                 Ask about your targets, today's logs, or your training - I'll answer using your own data.
               </AppText>
+              <View style={styles.promptChips}>
+                {COACH_PROMPT_SUGGESTIONS.map((prompt) => (
+                  <Pressable
+                    key={prompt}
+                    disabled={isSending}
+                    onPress={() => void send(prompt)}
+                    style={({ pressed }) => [styles.promptChip, pressed && styles.promptChipPressed]}
+                  >
+                    <AppText variant="caption" color={colors.primary}>{prompt}</AppText>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           }
           renderItem={({ item }) => (
@@ -170,6 +184,16 @@ export function CoachChatScreen({ route }: Props) {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.xxl },
+  promptChips: { marginTop: space.lg, gap: space.sm, alignSelf: "stretch" },
+  promptChip: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.pill,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    alignItems: "center",
+  },
+  promptChipPressed: { backgroundColor: colors.primaryTonal },
   disclaimerBanner: {
     padding: space.md,
     backgroundColor: colors.accentTonal,

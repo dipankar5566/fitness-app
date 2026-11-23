@@ -97,3 +97,12 @@ export function describeCalorieFloorRefusal(floor: CalorieFloor): string {
     `calories, whichever is higher. Going lower than that isn't safe to sustain. ${MEDICAL_DISCLAIMER}`
   );
 }
+
+/** Starter prompt chips shown on an empty coach thread - our own copy, grounded in the data the
+ * coach actually has (targets, today's logs, training). Not AI-generated; a fixed, safe starting set. */
+export const COACH_PROMPT_SUGGESTIONS: readonly string[] = [
+  "How am I doing on my targets today?",
+  "What should I eat for dinner to hit my protein goal?",
+  "Suggest a high-protein vegetarian breakfast.",
+  "Is my calorie target right for my goal?",
+];
