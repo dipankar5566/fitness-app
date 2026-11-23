@@ -10,15 +10,21 @@ import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { syncNow } from "../lib/sync-engine";
 import type { PickedIngredient, RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CreateCustomFood">;
+
+const useStyles = makeStyles((colors) => ({
+  separator: { height: 1, backgroundColor: colors.separator },
+}));
 
 /** Create-only in v1 (no editing an existing recipe) - nothing is written to SQLite until "Save",
  * so the ingredient list lives in component state while building. "Add ingredient" hands off to
  * FoodSearchScreen in pick mode, which hands the result back via route.params.pickedIngredient
  * (the standard React Navigation "pass params back to a screen already in the stack" pattern). */
 export function CreateCustomFoodScreen({ navigation, route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { accountId } = route.params;
   const [name, setName] = useState("");
   const [ingredients, setIngredients] = useState<PickedIngredient[]>([]);
@@ -95,7 +101,7 @@ export function CreateCustomFoodScreen({ navigation, route }: Props) {
             <AppText variant="h3" style={{ marginTop: space.xl }}>Ingredients</AppText>
           </View>
         }
-        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.separator }} />}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
           <ListRow
             title={item.name}

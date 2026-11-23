@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, View } from "react-native";
-import { AppText, Badge, Button, Card, TextField } from "../components/ui";
+import { AppText, Badge, Button, Card, Stepper, TextField } from "../components/ui";
 import { ChipSelect } from "../components/ChipSelect";
 import { trackEvent } from "../lib/analytics";
 import {
@@ -21,7 +21,7 @@ import { API_URL } from "../lib/env";
 import { insert } from "../lib/food-log-repo";
 import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LogMealFromText">;
 
@@ -79,6 +79,17 @@ function normalizeUnit(item: MealDraftItem, detail: FoodDetail | undefined): Mea
   return fallback ? { ...item, unit: fallback.name } : item;
 }
 
+const useStyles = makeStyles((colors) => ({
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: space.lg, paddingBottom: space.xxxl },
+  orLabel: { marginTop: space.md },
+  photoRow: { flexDirection: "row", gap: space.sm, marginTop: space.sm },
+  itemCard: { marginTop: space.lg },
+  itemHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  removeHit: { minHeight: 32, justifyContent: "center" },
+  matchHit: { marginTop: space.sm, minHeight: 32, justifyContent: "center" },
+}));
+
 /**
  * AI meal logging, from text or a photo (ARCHITECTURE.md §5, PRD §5.5) - one shared confirm
  * screen for both, since everything past "get a draft" is identical: free text (POST
@@ -92,6 +103,8 @@ function normalizeUnit(item: MealDraftItem, detail: FoodDetail | undefined): Mea
  * params.
  */
 export function LogMealFromTextScreen({ navigation, route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { accountId } = route.params;
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<MealDraftItem[]>([]);
@@ -270,8 +283,8 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
 
   return (
     <FlatList
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
+      style={styles.container}
+      contentContainerStyle={styles.content}
       data={draft}
       keyExtractor={(_, index) => String(index)}
       ListHeaderComponent={
@@ -293,8 +306,8 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
             style={{ marginTop: space.md }}
           />
 
-          <AppText variant="caption" color={colors.textTertiary} center style={{ marginTop: space.md }}>or</AppText>
-          <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.sm }}>
+          <AppText variant="caption" color={colors.textTertiary} center style={styles.orLabel}>or</AppText>
+          <View style={styles.photoRow}>
             <Button title="Take a photo" variant="secondary" onPress={() => void handleTakePhoto()} disabled={isParsing} style={{ flex: 1 }} />
             <Button title="Choose from gallery" variant="secondary" onPress={() => void handlePickPhoto()} disabled={isParsing} style={{ flex: 1 }} />
           </View>
@@ -308,12 +321,18 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
         const detail = item.foodRef ? detailByFoodRef[item.foodRef] : undefined;
         const preview = computePreview(item, detail);
         const unitOptions = ["g", ...(detail?.servingMeasures ?? []).map((measure) => measure.name)];
+        const step = item.unit === "g" || item.unit === "ml" ? 10 : 1;
 
         return (
-          <Card style={{ marginTop: space.lg }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Card style={styles.itemCard}>
+            <View style={styles.itemHeader}>
               <AppText variant="h3" style={{ flex: 1 }} numberOfLines={1}>{item.foodName ?? item.rawName}</AppText>
-              <Pressable onPress={() => removeItem(index)}>
+              <Pressable
+                onPress={() => removeItem(index)}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${item.foodName ?? item.rawName}`}
+                style={styles.removeHit}
+              >
                 <AppText variant="caption" color={colors.error}>Remove</AppText>
               </Pressable>
             </View>
@@ -327,19 +346,17 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
                   onPress={() =>
                     navigation.navigate("FoodSearch", { accountId, mode: "pickMealItem", mealItemIndex: index })
                   }
-                  style={{ marginTop: space.sm }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Find a match"
+                  style={styles.matchHit}
                 >
                   <AppText variant="captionMedium" color={colors.primary}>Find a match</AppText>
                 </Pressable>
               </>
             ) : (
               <>
-                <View style={{ marginTop: space.sm, width: 90 }}>
-                  <TextField
-                    keyboardType="numeric"
-                    value={String(item.quantity)}
-                    onChangeText={(value) => updateItem(index, { quantity: Number(value) || 0 })}
-                  />
+                <View style={{ marginTop: space.sm }}>
+                  <Stepper value={item.quantity} onChange={(value) => updateItem(index, { quantity: value })} step={step} min={step} suffix={` ${item.unit}`} />
                 </View>
                 <ChipSelect
                   label="Unit"
@@ -351,7 +368,9 @@ export function LogMealFromTextScreen({ navigation, route }: Props) {
                   onPress={() =>
                     navigation.navigate("FoodSearch", { accountId, mode: "pickMealItem", mealItemIndex: index })
                   }
-                  style={{ marginTop: space.sm }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Find a different match"
+                  style={styles.matchHit}
                 >
                   <AppText variant="captionMedium" color={colors.primary}>Find a different match</AppText>
                 </Pressable>

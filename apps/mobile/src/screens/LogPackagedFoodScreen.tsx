@@ -3,7 +3,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { AppText, Button, Card, Screen, TextField } from "../components/ui";
+import { AppText, Button, Card, Screen, Stepper } from "../components/ui";
 import { ChipSelect } from "../components/ChipSelect";
 import { trackEvent } from "../lib/analytics";
 import { lookupPackagedFood, type PackagedFoodDetail } from "../lib/api";
@@ -13,7 +13,7 @@ import { API_URL } from "../lib/env";
 import { insert } from "../lib/food-log-repo";
 import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LogPackagedFood">;
 
@@ -31,6 +31,17 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+const useStyles = makeStyles((colors) => ({
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  notFound: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sm },
+  macroRow: { flexDirection: "row", gap: space.lg, marginTop: space.md },
+  macroDot: { width: 8, height: 8, borderRadius: 4 },
+  macroItem: { flexDirection: "row", alignItems: "center", gap: space.xs },
+  dotProtein: { backgroundColor: colors.protein },
+  dotCarb: { backgroundColor: colors.carb },
+  dotFat: { backgroundColor: colors.fat },
+}));
+
 /**
  * Barcode -> Open Food Facts product -> log (PRD section 5.5). Quantity is always grams - same
  * v1 simplification as custom foods, since packaged_food has no serving-measure data the way
@@ -38,11 +49,13 @@ function capitalize(value: string): string {
  * add it" flow by handing off to the existing CreateCustomFoodScreen rather than a new one.
  */
 export function LogPackagedFoodScreen({ navigation, route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { accountId, barcode } = route.params;
   const [product, setProduct] = useState<PackagedFoodDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState("100");
+  const [quantity, setQuantity] = useState(100);
   const [mealType, setMealType] = useState<MealType>(defaultMealType());
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,11 +76,10 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
   }, [barcode]);
 
   const preview = useMemo(() => {
-    const parsedQuantity = Number(quantity);
-    if (!product || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+    if (!product || quantity <= 0) {
       return null;
     }
-    const scale = parsedQuantity / 100;
+    const scale = quantity / 100;
     const scaled = (per100g: number | null) => (per100g === null ? null : Math.round(per100g * scale * 10) / 10);
     return {
       kcal: scaled(product.nutrientsPer100g.energy_kcal),
@@ -78,8 +90,7 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
   }, [product, quantity]);
 
   const handleSubmit = async () => {
-    const parsedQuantity = Number(quantity);
-    if (!product || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+    if (!product || quantity <= 0) {
       setSubmitError("Enter a valid quantity in grams.");
       return;
     }
@@ -97,7 +108,7 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
         accountId: session.accountId,
         foodSource: "packaged",
         foodRef: product.id,
-        quantity: parsedQuantity,
+        quantity,
         unit: "g",
         mealType,
         loggedAt: now,
@@ -122,7 +133,7 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
   if (loadError) {
     return (
       <Screen>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View style={styles.centered}>
           <AppText color={colors.error} center>{loadError}</AppText>
         </View>
       </Screen>
@@ -132,7 +143,7 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
   if (notFound) {
     return (
       <Screen>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: space.sm }}>
+        <View style={styles.notFound}>
           <AppText variant="h2" center>No product found for this barcode.</AppText>
           <AppText color={colors.textSecondary} center>You can add it manually as a custom food instead.</AppText>
           <Button
@@ -148,7 +159,7 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
   if (!product) {
     return (
       <Screen>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </Screen>
@@ -159,27 +170,41 @@ export function LogPackagedFoodScreen({ navigation, route }: Props) {
     <Screen scroll>
       <AppText variant="h1">{product.name}</AppText>
       {product.brand ? <AppText color={colors.textSecondary} style={{ marginTop: space.xxs }}>{product.brand}</AppText> : null}
-      <AppText variant="body" color={colors.textSecondary} style={{ marginTop: space.xxs, marginBottom: space.lg }}>
-        Per 100g: {product.nutrientsPer100g.energy_kcal ?? "?"} kcal · {product.nutrientsPer100g.protein_g ?? "?"}g protein
+      <AppText variant="caption" color={colors.textTertiary} style={{ marginTop: space.xxs, marginBottom: space.lg }}>
+        Per 100g: {product.nutrientsPer100g.energy_kcal != null ? Math.round(product.nutrientsPer100g.energy_kcal) : "?"} kcal ·{" "}
+        {product.nutrientsPer100g.protein_g != null ? Math.round(product.nutrientsPer100g.protein_g) : "?"}g protein
       </AppText>
 
-      <TextField label="Quantity (grams)" keyboardType="numeric" value={quantity} onChangeText={setQuantity} />
+      <Stepper label="Quantity" value={quantity} onChange={setQuantity} step={10} min={10} suffix=" g" />
 
-      <ChipSelect label="Meal" options={MEAL_TYPES} value={mealType} onChange={setMealType} formatOption={capitalize} />
+      <View style={{ marginTop: space.lg }}>
+        <ChipSelect label="Meal" options={MEAL_TYPES} value={mealType} onChange={setMealType} formatOption={capitalize} />
+      </View>
 
       {preview ? (
         <Card style={{ marginTop: space.xl }}>
           <AppText variant="captionMedium" color={colors.textSecondary}>This entry</AppText>
-          <AppText variant="h1" numbers style={{ marginTop: space.xxs }}>{preview.kcal ?? "?"} kcal</AppText>
-          <AppText variant="body" color={colors.textSecondary} numbers style={{ marginTop: space.xxs }}>
-            {preview.proteinG ?? "?"}g protein · {preview.carbG ?? "?"}g carb · {preview.fatG ?? "?"}g fat
-          </AppText>
+          <AppText variant="display" numbers style={{ marginTop: space.xxs }}>{preview.kcal ?? "?"} kcal</AppText>
+          <View style={styles.macroRow}>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.dotProtein]} />
+              <AppText variant="body" color={colors.textSecondary} numbers>{preview.proteinG ?? "?"}g protein</AppText>
+            </View>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.dotCarb]} />
+              <AppText variant="body" color={colors.textSecondary} numbers>{preview.carbG ?? "?"}g carb</AppText>
+            </View>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.dotFat]} />
+              <AppText variant="body" color={colors.textSecondary} numbers>{preview.fatG ?? "?"}g fat</AppText>
+            </View>
+          </View>
         </Card>
       ) : null}
 
       {submitError ? <AppText color={colors.error} center style={{ marginTop: space.lg }}>{submitError}</AppText> : null}
       <Button
-        title={isSubmitting ? "Saving..." : "Log it"}
+        title={isSubmitting ? "Saving..." : `Log to ${capitalize(mealType)}`}
         onPress={() => void handleSubmit()}
         loading={isSubmitting}
         style={{ marginTop: space.xxl }}

@@ -3,7 +3,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Crypto from "expo-crypto";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { AppText, Button, Card, Screen, TextField } from "../components/ui";
+import { AppText, Button, Card, Screen, Stepper } from "../components/ui";
 import { ChipSelect } from "../components/ChipSelect";
 import { trackEvent } from "../lib/analytics";
 import { getFoodDetail, type FoodDetail } from "../lib/api";
@@ -14,7 +14,7 @@ import { cacheFood, getCachedFood } from "../lib/food-cache-repo";
 import { insert } from "../lib/food-log-repo";
 import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LogFood">;
 
@@ -32,11 +32,23 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+const useStyles = makeStyles((colors) => ({
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  macroRow: { flexDirection: "row", gap: space.lg, marginTop: space.md },
+  macroDot: { width: 8, height: 8, borderRadius: 4 },
+  macroItem: { flexDirection: "row", alignItems: "center", gap: space.xs },
+  dotProtein: { backgroundColor: colors.protein },
+  dotCarb: { backgroundColor: colors.carb },
+  dotFat: { backgroundColor: colors.fat },
+}));
+
 export function LogFoodScreen({ navigation, route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { accountId, foodCode, presetMealType } = route.params;
   const [detail, setDetail] = useState<FoodDetail | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [quantity, setQuantity] = useState("100");
+  const [quantity, setQuantity] = useState(100);
   const [unit, setUnit] = useState("g");
   const [mealType, setMealType] = useState<MealType>(presetMealType ?? defaultMealType());
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -46,7 +58,7 @@ export function LogFoodScreen({ navigation, route }: Props) {
     const defaultServing = result.servingMeasures.find((measure) => measure.isDefault) ?? result.servingMeasures[0];
     if (defaultServing) {
       setUnit(defaultServing.name);
-      setQuantity("1");
+      setQuantity(1);
     }
   };
 
@@ -75,6 +87,11 @@ export function LogFoodScreen({ navigation, route }: Props) {
     [detail],
   );
 
+  // Grams change in steps of 10 (fine-grained enough without many taps); a count-based serving
+  // (e.g. "1 idli") steps by whole units - replaces a bare keyboard-only quantity field
+  // (docs/UI_UX_AUDIT.md M5).
+  const quantityStep = unit === "g" || unit === "ml" ? 10 : 1;
+
   const gramsPerUnit = (candidateUnit: string): number | null => {
     if (candidateUnit === "g" || candidateUnit === "ml") {
       return 1;
@@ -83,15 +100,14 @@ export function LogFoodScreen({ navigation, route }: Props) {
   };
 
   const preview = useMemo(() => {
-    const parsedQuantity = Number(quantity);
-    if (!detail || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+    if (!detail || quantity <= 0) {
       return null;
     }
     const perUnit = gramsPerUnit(unit);
     if (perUnit === null) {
       return null;
     }
-    const scale = (parsedQuantity * perUnit) / 100;
+    const scale = (quantity * perUnit) / 100;
     const scaled = (per100g: number | null) =>
       per100g === null ? null : Math.round(per100g * scale * 10) / 10;
     return {
@@ -103,8 +119,7 @@ export function LogFoodScreen({ navigation, route }: Props) {
   }, [detail, quantity, unit]);
 
   const handleSubmit = async () => {
-    const parsedQuantity = Number(quantity);
-    if (!detail || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+    if (!detail || quantity <= 0) {
       setSubmitError("Enter a valid quantity.");
       return;
     }
@@ -122,7 +137,7 @@ export function LogFoodScreen({ navigation, route }: Props) {
         accountId: session.accountId,
         foodSource: "indb",
         foodRef: detail.code,
-        quantity: parsedQuantity,
+        quantity,
         unit,
         mealType,
         loggedAt: now,
@@ -147,7 +162,7 @@ export function LogFoodScreen({ navigation, route }: Props) {
   if (loadFailed) {
     return (
       <Screen>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View style={styles.centered}>
           <AppText color={colors.error} center>Could not load this food. Go back and try again.</AppText>
         </View>
       </Screen>
@@ -157,7 +172,7 @@ export function LogFoodScreen({ navigation, route }: Props) {
   if (!detail) {
     return (
       <Screen>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </Screen>
@@ -167,34 +182,55 @@ export function LogFoodScreen({ navigation, route }: Props) {
   return (
     <Screen scroll>
       <AppText variant="h1">{detail.name}</AppText>
-      <AppText variant="body" color={colors.textSecondary} style={{ marginTop: space.xxs, marginBottom: space.lg }}>
-        Per 100g: {detail.nutrientsPer100g.kcal ?? "?"} kcal · {detail.nutrientsPer100g.proteinG ?? "?"}g protein
+      <AppText variant="caption" color={colors.textTertiary} style={{ marginTop: space.xxs, marginBottom: space.lg }}>
+        Per 100g: {detail.nutrientsPer100g.kcal != null ? Math.round(detail.nutrientsPer100g.kcal) : "?"} kcal ·{" "}
+        {detail.nutrientsPer100g.proteinG != null ? Math.round(detail.nutrientsPer100g.proteinG) : "?"}g protein
       </AppText>
 
-      <TextField label="Quantity" keyboardType="numeric" value={quantity} onChangeText={setQuantity} />
-
-      <ChipSelect label="Unit" options={unitOptions} value={unit} onChange={setUnit} />
-      <ChipSelect
-        label="Meal"
-        options={MEAL_TYPES}
-        value={mealType}
-        onChange={setMealType}
-        formatOption={capitalize}
+      <Stepper
+        label="Quantity"
+        value={quantity}
+        onChange={setQuantity}
+        step={quantityStep}
+        min={quantityStep}
+        suffix={` ${unit}`}
       />
+
+      <View style={{ marginTop: space.lg }}>
+        <ChipSelect label="Unit" options={unitOptions} value={unit} onChange={setUnit} />
+        <ChipSelect
+          label="Meal"
+          options={MEAL_TYPES}
+          value={mealType}
+          onChange={setMealType}
+          formatOption={capitalize}
+        />
+      </View>
 
       {preview ? (
         <Card style={{ marginTop: space.xl }}>
           <AppText variant="captionMedium" color={colors.textSecondary}>This entry</AppText>
-          <AppText variant="h1" numbers style={{ marginTop: space.xxs }}>{preview.kcal ?? "?"} kcal</AppText>
-          <AppText variant="body" color={colors.textSecondary} numbers style={{ marginTop: space.xxs }}>
-            {preview.proteinG ?? "?"}g protein · {preview.carbG ?? "?"}g carb · {preview.fatG ?? "?"}g fat
-          </AppText>
+          <AppText variant="display" numbers style={{ marginTop: space.xxs }}>{preview.kcal ?? "?"} kcal</AppText>
+          <View style={styles.macroRow}>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.dotProtein]} />
+              <AppText variant="body" color={colors.textSecondary} numbers>{preview.proteinG ?? "?"}g protein</AppText>
+            </View>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.dotCarb]} />
+              <AppText variant="body" color={colors.textSecondary} numbers>{preview.carbG ?? "?"}g carb</AppText>
+            </View>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.dotFat]} />
+              <AppText variant="body" color={colors.textSecondary} numbers>{preview.fatG ?? "?"}g fat</AppText>
+            </View>
+          </View>
         </Card>
       ) : null}
 
       {submitError ? <AppText color={colors.error} center style={{ marginTop: space.lg }}>{submitError}</AppText> : null}
       <Button
-        title={isSubmitting ? "Saving..." : "Log it"}
+        title={isSubmitting ? "Saving..." : `Log to ${capitalize(mealType)}`}
         onPress={() => void handleSubmit()}
         loading={isSubmitting}
         style={{ marginTop: space.xxl }}

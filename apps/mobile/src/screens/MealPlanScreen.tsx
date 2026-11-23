@@ -27,7 +27,7 @@ import { API_URL } from "../lib/env";
 import { insert } from "../lib/food-log-repo";
 import { syncNow } from "../lib/sync-engine";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "MealPlan">;
 
@@ -38,6 +38,10 @@ const MEAL_LABELS: Record<MealDisplayType, string> = {
   dinner: "Dinner",
 };
 
+const useStyles = makeStyles(() => ({
+  itemRow: { flexDirection: "row", alignItems: "center", paddingVertical: space.xs },
+}));
+
 /**
  * Today's AI sample-day meal plan (PRD §5.5). The server (apps/api/src/meal-plan/) has already
  * resolved every item to a real indb food, re-costed it from our own nutrients and validated the
@@ -47,6 +51,8 @@ const MEAL_LABELS: Record<MealDisplayType, string> = {
  * generation is a quota-counted AI call. Swaps are local to this visit, not written back.
  */
 export function MealPlanScreen({ navigation, route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { accountId, swappedPlanItem } = route.params;
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -214,7 +220,7 @@ export function MealPlanScreen({ navigation, route }: Props) {
             <SectionHeader title={`${MEAL_LABELS[mealType]} · ${mealKcal} kcal`} style={{ marginTop: space.xl }} />
             <Card>
               {entries.map(({ item, index }) => (
-                <View key={`${item.foodRef}-${index}`} style={{ flexDirection: "row", alignItems: "center", paddingVertical: space.xs }}>
+                <View key={`${item.foodRef}-${index}`} style={styles.itemRow}>
                   <View style={{ flex: 1 }}>
                     <AppText variant="bodyMedium">{item.foodName}</AppText>
                     <AppText variant="caption" color={colors.textSecondary} numbers>

@@ -1,8 +1,8 @@
 import { isAllowed, type DietClass, type DietType } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, View } from "react-native";
-import { AppText, Badge, Button, EmptyState, ListRow, Screen, TextField } from "../components/ui";
+import { AppText, Badge, Button, EmptyState, ListRow, Screen, SectionHeader, TextField } from "../components/ui";
 import { isNetworkError, reportFood, searchFoods } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
@@ -10,7 +10,7 @@ import { API_URL } from "../lib/env";
 import { listRecentFoods } from "../lib/food-cache-repo";
 import { getKv } from "../lib/kv-store";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FoodSearch">;
 
@@ -20,6 +20,10 @@ interface DisplayResult {
   foodType: string;
   dietClass: DietClass | null;
   jainOk: boolean | null;
+  /** Only populated for recent/cached foods - live search results don't carry nutrient data
+   * (searchFoods() intentionally returns a lighter row; see docs/UI_UX_AUDIT.md M5/H4 - showing
+   * this for recents is "free" since the full detail is already cached locally). */
+  kcal?: number | null;
 }
 
 function capitalize(value: string): string {
@@ -34,9 +38,19 @@ const DIET_LABELS: Record<DietType, string> = {
   jain: "Jain",
 };
 
+const useStyles = makeStyles((colors) => ({
+  searchField: { margin: space.lg, marginBottom: space.sm },
+  dietHint: { marginHorizontal: space.lg },
+  listContent: { paddingHorizontal: space.lg, paddingBottom: space.xl },
+  separator: { height: 1, backgroundColor: colors.separator },
+}));
+
 export function FoodSearchScreen({ navigation, route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DisplayResult[]>([]);
+  const [recent, setRecent] = useState<DisplayResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -64,16 +78,35 @@ export function FoodSearchScreen({ navigation, route }: Props) {
     }
   };
 
+  const loadRecent = useCallback(async (currentDietType: DietType | null) => {
+    const db = await getDatabase();
+    const cached = await listRecentFoods(db);
+    const filtered = currentDietType
+      ? cached.filter((item) => isAllowed(currentDietType, item.dietClass, item.jainOk))
+      : cached;
+    setRecent(
+      filtered.map((item) => ({
+        code: item.code,
+        name: item.name,
+        foodType: item.foodType,
+        dietClass: item.dietClass,
+        jainOk: item.jainOk,
+        kcal: item.nutrientsPer100g.kcal,
+      })),
+    );
+  }, []);
+
+  // Recent foods show immediately on open (docs/UI_UX_AUDIT.md H4/M1) - previously this screen was
+  // just an empty text field with the keyboard up until a search was typed.
   useEffect(() => {
     void (async () => {
       const db = await getDatabase();
       const cached = await getKv(db, "cached_profile");
-      if (cached) {
-        const profile = JSON.parse(cached) as { diet_type?: DietType } | null;
-        setDietType(profile?.diet_type ?? null);
-      }
+      const currentDietType = cached ? (JSON.parse(cached) as { diet_type?: DietType } | null)?.diet_type ?? null : null;
+      setDietType(currentDietType);
+      await loadRecent(currentDietType);
     })();
-  }, []);
+  }, [loadRecent]);
 
   const handleSearch = async () => {
     if (!query.trim()) {
@@ -95,21 +128,8 @@ export function FoodSearchScreen({ navigation, route }: Props) {
       setHasSearched(true);
     } catch (err) {
       if (isNetworkError(err)) {
-        const db = await getDatabase();
-        const recent = await listRecentFoods(db);
-        const filtered = dietType
-          ? recent.filter((item) => isAllowed(dietType, item.dietClass, item.jainOk))
-          : recent;
-        setResults(
-          filtered.map((item) => ({
-            code: item.code,
-            name: item.name,
-            foodType: item.foodType,
-            dietClass: item.dietClass,
-            jainOk: item.jainOk,
-          })),
-        );
-        setError(filtered.length > 0 ? "Offline - showing recently logged foods." : "Offline, and no recent foods to show.");
+        await loadRecent(dietType);
+        setError(recent.length > 0 ? "Offline - showing recently logged foods." : "Offline, and no recent foods to show.");
       } else {
         setError("Search failed. Check your connection and try again.");
       }
@@ -119,10 +139,47 @@ export function FoodSearchScreen({ navigation, route }: Props) {
     }
   };
 
+  const handlePickResult = (item: DisplayResult) => {
+    if (route.params.mode === "pickIngredient") {
+      navigation.navigate("IngredientQuantity", { accountId: route.params.accountId, foodCode: item.code });
+    } else if (route.params.mode === "swapPlanItem") {
+      navigation.navigate("MealPlan", {
+        accountId: route.params.accountId,
+        swappedPlanItem: { index: route.params.mealItemIndex!, code: item.code, name: item.name },
+      });
+    } else if (route.params.mode === "pickMealItem") {
+      navigation.navigate("LogMealFromText", {
+        accountId: route.params.accountId,
+        pickedMealItemFood: { index: route.params.mealItemIndex!, code: item.code, name: item.name },
+      });
+    } else {
+      navigation.navigate("LogFood", {
+        accountId: route.params.accountId,
+        foodCode: item.code,
+        presetMealType: route.params.presetMealType,
+      });
+    }
+  };
+
+  const renderRow = (item: DisplayResult) => (
+    <ListRow
+      title={item.name}
+      subtitle={item.kcal != null ? `${capitalize(item.foodType)} · ${Math.round(item.kcal)} kcal/100g` : capitalize(item.foodType)}
+      trailing={item.dietClass === null ? <Badge label="unverified" tone="warning" /> : undefined}
+      onPress={() => handlePickResult(item)}
+    />
+  );
+
+  // Before any search: show recent foods (or an empty hint). After a search: show the live
+  // results (or the offline-fallback recent list, already in `results` via the catch path above).
+  const showingRecent = !hasSearched && !isSearching;
+  const listData = showingRecent ? recent : results;
+
   return (
     <Screen padded={false}>
       <TextField
-        style={{ margin: space.lg, marginBottom: space.sm }}
+        label="Search"
+        style={styles.searchField}
         placeholder="Search for a food, e.g. idli"
         value={query}
         onChangeText={setQuery}
@@ -131,7 +188,7 @@ export function FoodSearchScreen({ navigation, route }: Props) {
         autoFocus
       />
       {dietType ? (
-        <AppText variant="caption" color={colors.textSecondary} style={{ marginHorizontal: space.lg }}>
+        <AppText variant="caption" color={colors.textSecondary} style={styles.dietHint}>
           Showing {DIET_LABELS[dietType]}-friendly foods
         </AppText>
       ) : null}
@@ -142,43 +199,18 @@ export function FoodSearchScreen({ navigation, route }: Props) {
         </AppText>
       ) : null}
       <FlatList
-        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xl }}
-        data={results}
+        contentContainerStyle={styles.listContent}
+        data={listData}
         keyExtractor={(item) => item.code}
-        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.separator }} />}
-        renderItem={({ item }) => (
-          <ListRow
-            title={item.name}
-            subtitle={capitalize(item.foodType)}
-            trailing={item.dietClass === null ? <Badge label="unverified" tone="warning" /> : undefined}
-            onPress={() => {
-              if (route.params.mode === "pickIngredient") {
-                navigation.navigate("IngredientQuantity", {
-                  accountId: route.params.accountId,
-                  foodCode: item.code,
-                });
-              } else if (route.params.mode === "swapPlanItem") {
-                navigation.navigate("MealPlan", {
-                  accountId: route.params.accountId,
-                  swappedPlanItem: { index: route.params.mealItemIndex!, code: item.code, name: item.name },
-                });
-              } else if (route.params.mode === "pickMealItem") {
-                navigation.navigate("LogMealFromText", {
-                  accountId: route.params.accountId,
-                  pickedMealItemFood: { index: route.params.mealItemIndex!, code: item.code, name: item.name },
-                });
-              } else {
-                navigation.navigate("LogFood", {
-                  accountId: route.params.accountId,
-                  foodCode: item.code,
-                  presetMealType: route.params.presetMealType,
-                });
-              }
-            }}
-          />
-        )}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListHeaderComponent={
+          showingRecent && recent.length > 0 ? <SectionHeader title="Recent" style={{ marginTop: space.md }} /> : undefined
+        }
+        renderItem={({ item }) => renderRow(item)}
         ListEmptyComponent={
-          hasSearched && !isSearching ? (
+          showingRecent ? (
+            query.trim() ? undefined : <EmptyState icon="magnify" title="Search for a food to get started." style={{ marginTop: space.xxl }} />
+          ) : hasSearched && !isSearching ? (
             <EmptyState icon="magnify" title="No results." style={{ marginTop: space.xxl }} />
           ) : undefined
         }
