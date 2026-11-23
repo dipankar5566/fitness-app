@@ -26,6 +26,12 @@ import {
   type RemoteWaterLog,
 } from "./water-repo";
 import {
+  applyRemote as applyRemoteFasting,
+  getDirty as getDirtyFasting,
+  markClean as markFastingClean,
+  type RemoteFastingLog,
+} from "./fasting-repo";
+import {
   applyRemoteSessions,
   applyRemoteSets,
   getDirtySessions,
@@ -41,8 +47,8 @@ const SYNC_TOKEN_KEY = "sync_token";
 let inFlight: Promise<void> | null = null;
 
 /**
- * Pushes dirty rows across all seven syncable tables (food_log, custom_food,
- * custom_food_ingredient, workout_session, workout_set, body_metric, water_log), then pulls
+ * Pushes dirty rows across all eight syncable tables (food_log, custom_food,
+ * custom_food_ingredient, workout_session, workout_set, body_metric, water_log, fasting_log), then pulls
  * everything since the last sync token (ARCHITECTURE.md §3).
  * A module-level guard collapses overlapping calls (app start, after a write, foreground) into one
  * run. Network failures are swallowed - rows just stay dirty and go out next time; anything else
@@ -79,6 +85,7 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
   const dirtySets = await getDirtySets(db);
   const dirtyBodyMetrics = await getDirtyBodyMetrics(db);
   const dirtyWater = await getDirtyWater(db);
+  const dirtyFasting = await getDirtyFasting(db);
 
   if (
     dirtyFoodLog.length === 0 &&
@@ -87,7 +94,8 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
     dirtySessions.length === 0 &&
     dirtySets.length === 0 &&
     dirtyBodyMetrics.length === 0 &&
-    dirtyWater.length === 0
+    dirtyWater.length === 0 &&
+    dirtyFasting.length === 0
   ) {
     return;
   }
@@ -155,6 +163,14 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
           amountMl: row.amountMl, recordedAt: row.recordedAt,
         },
       })),
+      ...dirtyFasting.map((row) => ({
+        table: "fasting_log" as const,
+        op: row.isDeleted ? ("delete" as const) : ("upsert" as const),
+        row: {
+          id: row.id, accountId: row.accountId, isDeleted: row.isDeleted, updatedAt: row.updatedAt,
+          startedAt: row.startedAt, endedAt: row.endedAt ?? undefined, targetMinutes: row.targetMinutes,
+        },
+      })),
     ],
   });
 
@@ -196,6 +212,11 @@ async function pushDirty(db: SqlDb, apiUrl: string, accessToken: string): Promis
       await markWaterClean(db, row.id, row.updatedAt);
     }
   }
+  for (const row of dirtyFasting) {
+    if (appliedIds.has(row.id)) {
+      await markFastingClean(db, row.id, row.updatedAt);
+    }
+  }
 }
 
 async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Promise<void> {
@@ -209,6 +230,7 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
   const setRows: RemoteWorkoutSet[] = [];
   const bodyMetricRows: RemoteBodyMetric[] = [];
   const waterRows: RemoteWaterLog[] = [];
+  const fastingRows: RemoteFastingLog[] = [];
 
   for (const change of response.changes) {
     const row = change.row as Record<string, unknown>;
@@ -294,6 +316,16 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
         isDeleted,
         updatedAt: row.updatedAt as string,
       });
+    } else if (change.table === "fasting_log") {
+      fastingRows.push({
+        id: row.id as string,
+        accountId: row.accountId as string,
+        startedAt: row.startedAt as string,
+        endedAt: (row.endedAt as string | undefined) ?? null,
+        targetMinutes: row.targetMinutes as number,
+        isDeleted,
+        updatedAt: row.updatedAt as string,
+      });
     }
   }
 
@@ -317,6 +349,9 @@ async function pullChanges(db: SqlDb, apiUrl: string, accessToken: string): Prom
   }
   if (waterRows.length > 0) {
     await applyRemoteWater(db, waterRows);
+  }
+  if (fastingRows.length > 0) {
+    await applyRemoteFasting(db, fastingRows);
   }
   await setKv(db, SYNC_TOKEN_KEY, response.nextSyncToken);
 }

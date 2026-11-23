@@ -3,6 +3,7 @@ import {
   bodyMetricSchema,
   customFoodIngredientSchema,
   customFoodSchema,
+  fastingLogSchema,
   foodLogEntrySchema,
   waterLogSchema,
   workoutSessionSchema,
@@ -251,10 +252,6 @@ const bodyMetricAdapter: TableAdapter = {
   }),
 };
 
-/** One adapter per syncable table actually wired up so far. push()/pull() never special-case a
- * table beyond this map (food_log's macro enrichment in pull() is the one exception, since macros
- * aren't part of the row's own stored columns). accountId is always taken from the JWT, never the
- * pushed row, so a row can never be pushed into someone else's account. */
 const waterLogAdapter: TableAdapter = {
   upsertSchema: waterLogSchema,
   deleteSchema: deleteRowSchema,
@@ -286,6 +283,41 @@ const waterLogAdapter: TableAdapter = {
   }),
 };
 
+const fastingLogAdapter: TableAdapter = {
+  upsertSchema: fastingLogSchema,
+  deleteSchema: deleteRowSchema,
+  conflictTable: "app.fasting_log",
+  upsertSql: `INSERT INTO app.fasting_log (id, account_id, started_at, ended_at, target_minutes, is_deleted, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (id) DO UPDATE SET
+       started_at = EXCLUDED.started_at, ended_at = EXCLUDED.ended_at, target_minutes = EXCLUDED.target_minutes,
+       is_deleted = EXCLUDED.is_deleted, updated_at = EXCLUDED.updated_at, server_updated_at = now()
+     WHERE app.fasting_log.account_id = $2 AND app.fasting_log.updated_at <= EXCLUDED.updated_at`,
+  upsertParams: (accountId, row) => [
+    row.id, accountId, row.startedAt, row.endedAt ?? null, row.targetMinutes, row.isDeleted, row.updatedAt,
+  ],
+  deleteSql: `UPDATE app.fasting_log SET is_deleted = true, updated_at = $3, server_updated_at = now()
+     WHERE id = $1 AND account_id = $2 AND updated_at <= $3`,
+  deleteParams: (accountId, row) => [row.id, accountId, row.updatedAt],
+  selectSql: (hasSince) =>
+    hasSince
+      ? "SELECT * FROM app.fasting_log WHERE account_id = $1 AND server_updated_at > $2 ORDER BY server_updated_at"
+      : "SELECT * FROM app.fasting_log WHERE account_id = $1 ORDER BY server_updated_at",
+  toChangeRow: (row) => ({
+    id: row.id,
+    accountId: row.account_id,
+    isDeleted: row.is_deleted,
+    updatedAt: (row.updated_at as Date).toISOString(),
+    startedAt: (row.started_at as Date).toISOString(),
+    endedAt: row.ended_at ? (row.ended_at as Date).toISOString() : undefined,
+    targetMinutes: Number(row.target_minutes),
+  }),
+};
+
+/** One adapter per syncable table actually wired up so far. push()/pull() never special-case a
+ * table beyond this map (food_log's macro enrichment in pull() is the one exception, since macros
+ * aren't part of the row's own stored columns). accountId is always taken from the JWT, never the
+ * pushed row, so a row can never be pushed into someone else's account. */
 const registry: Partial<Record<SyncTableName, TableAdapter>> = {
   food_log: foodLogAdapter,
   custom_food: customFoodAdapter,
@@ -294,6 +326,7 @@ const registry: Partial<Record<SyncTableName, TableAdapter>> = {
   workout_set: workoutSetAdapter,
   body_metric: bodyMetricAdapter,
   water_log: waterLogAdapter,
+  fasting_log: fastingLogAdapter,
 };
 
 @Injectable()

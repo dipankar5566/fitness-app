@@ -84,13 +84,23 @@ const NOTIFICATION_BODY: Record<ReminderKind, string> = {
   water: "Remember to drink some water.",
 };
 
-/** Cancels every notification this app has scheduled, then reschedules one daily trigger per
+/** Identifier of the one-off "fast complete" notification (scheduleFastCompleteNotification) - the
+ * only scheduled notification applyReminderSchedule leaves alone, since it isn't a daily reminder. */
+export const FAST_COMPLETE_NOTIFICATION_ID = "fast-complete";
+
+/** Cancels every daily reminder this app has scheduled, then reschedules one daily trigger per
  * enabled reminder. Cancel-then-reschedule-all (rather than diffing) stays correct even if a
  * reminder was renamed/removed/retimed since the last schedule, at the cost of a full
  * cancel+reschedule on every settings change - reminders change rarely enough that this isn't a
- * real cost. */
+ * real cost. A pending fast-complete notification is kept - App.tsx reapplies this schedule on
+ * every launch, which would otherwise silently drop an in-progress fast's alert. */
 export async function applyReminderSchedule(settings: ReminderSetting[]): Promise<void> {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const notification of scheduled) {
+    if (notification.identifier !== FAST_COMPLETE_NOTIFICATION_ID) {
+      await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+    }
+  }
   for (const reminder of settings) {
     if (!reminder.enabled) continue;
     await Notifications.scheduleNotificationAsync({
@@ -103,6 +113,23 @@ export async function applyReminderSchedule(settings: ReminderSetting[]): Promis
       },
     });
   }
+}
+
+/** Schedules (replacing any previous one) a single notification for when a fast reaches its target.
+ * Best-effort: silently skipped without notification permission, and a target already in the past
+ * schedules nothing. Permission is requested lazily here, the first time a fast is started. */
+export async function scheduleFastCompleteNotification(at: Date): Promise<void> {
+  await cancelFastCompleteNotification();
+  if (at.getTime() <= Date.now() || !(await ensureNotificationPermission())) return;
+  await Notifications.scheduleNotificationAsync({
+    identifier: FAST_COMPLETE_NOTIFICATION_ID,
+    content: { title: "Fast complete", body: "You reached your fasting goal - your eating window is open." },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
+  });
+}
+
+export async function cancelFastCompleteNotification(): Promise<void> {
+  await Notifications.cancelScheduledNotificationAsync(FAST_COMPLETE_NOTIFICATION_ID);
 }
 
 /** Requests OS notification permission if it isn't already granted - called lazily, the first

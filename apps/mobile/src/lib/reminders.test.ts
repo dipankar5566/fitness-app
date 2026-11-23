@@ -9,16 +9,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // would otherwise evaluate "./reminders" (and the vi.mock factory) before a plain top-level const
 // here had run, hitting a "before initialization" TDZ error.
 const notificationsMock = vi.hoisted(() => ({
-  cancelAllScheduledNotificationsAsync: vi.fn(),
+  getAllScheduledNotificationsAsync: vi.fn(),
+  cancelScheduledNotificationAsync: vi.fn(),
   scheduleNotificationAsync: vi.fn(),
   getPermissionsAsync: vi.fn(),
   requestPermissionsAsync: vi.fn(),
-  SchedulableTriggerInputTypes: { DAILY: "daily" },
+  SchedulableTriggerInputTypes: { DAILY: "daily", DATE: "date" },
 }));
 vi.mock("expo-notifications", () => notificationsMock);
 
 import {
   applyReminderSchedule,
+  FAST_COMPLETE_NOTIFICATION_ID,
+  scheduleFastCompleteNotification,
   DEFAULT_REMINDERS,
   ensureNotificationPermission,
   isValidTimeOfDay,
@@ -78,7 +81,11 @@ describe("applyReminderSchedule", () => {
     vi.clearAllMocks();
   });
 
-  it("cancels everything, then schedules only the enabled reminders with a daily trigger", async () => {
+  it("cancels every daily reminder but keeps a pending fast-complete alert, then schedules only the enabled reminders", async () => {
+    notificationsMock.getAllScheduledNotificationsAsync.mockResolvedValue([
+      { identifier: "dinner" },
+      { identifier: FAST_COMPLETE_NOTIFICATION_ID },
+    ]);
     const settings: ReminderSetting[] = [
       { id: "breakfast", kind: "meal", label: "Breakfast", hour: 9, minute: 0, enabled: true },
       { id: "lunch", kind: "meal", label: "Lunch", hour: 13, minute: 30, enabled: false },
@@ -86,7 +93,8 @@ describe("applyReminderSchedule", () => {
 
     await applyReminderSchedule(settings);
 
-    expect(notificationsMock.cancelAllScheduledNotificationsAsync).toHaveBeenCalledTimes(1);
+    expect(notificationsMock.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1);
+    expect(notificationsMock.cancelScheduledNotificationAsync).toHaveBeenCalledWith("dinner");
     expect(notificationsMock.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
     expect(notificationsMock.scheduleNotificationAsync).toHaveBeenCalledWith({
       identifier: "breakfast",
@@ -96,9 +104,39 @@ describe("applyReminderSchedule", () => {
   });
 
   it("schedules nothing when every reminder is disabled", async () => {
+    notificationsMock.getAllScheduledNotificationsAsync.mockResolvedValue([{ identifier: "breakfast" }]);
     await applyReminderSchedule([{ id: "breakfast", kind: "meal", label: "Breakfast", hour: 9, minute: 0, enabled: false }]);
 
-    expect(notificationsMock.cancelAllScheduledNotificationsAsync).toHaveBeenCalledTimes(1);
+    expect(notificationsMock.cancelScheduledNotificationAsync).toHaveBeenCalledWith("breakfast");
+    expect(notificationsMock.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe("scheduleFastCompleteNotification", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("replaces any previous alert with a one-off date trigger at the fast's target", async () => {
+    notificationsMock.getPermissionsAsync.mockResolvedValue({ granted: true });
+    const at = new Date(Date.now() + 16 * 3_600_000);
+
+    await scheduleFastCompleteNotification(at);
+
+    expect(notificationsMock.cancelScheduledNotificationAsync).toHaveBeenCalledWith(FAST_COMPLETE_NOTIFICATION_ID);
+    expect(notificationsMock.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: FAST_COMPLETE_NOTIFICATION_ID, trigger: { type: "date", date: at } }),
+    );
+  });
+
+  it("schedules nothing for a target in the past or without permission", async () => {
+    notificationsMock.getPermissionsAsync.mockResolvedValue({ granted: true });
+    await scheduleFastCompleteNotification(new Date(Date.now() - 1000));
+
+    notificationsMock.getPermissionsAsync.mockResolvedValue({ granted: false });
+    notificationsMock.requestPermissionsAsync.mockResolvedValue({ granted: false });
+    await scheduleFastCompleteNotification(new Date(Date.now() + 3_600_000));
+
     expect(notificationsMock.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 });

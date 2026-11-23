@@ -127,6 +127,17 @@ export const waterLogSchema = syncableBaseSchema.extend({
 });
 export type WaterLog = z.infer<typeof waterLogSchema>;
 
+// Intermittent fasting (0011_fasting_log.sql) — one syncable row per fast; endedAt absent while
+// active. targetMinutes bounds mirror the table's CHECK (12h-23h, no multi-day fasts).
+export const FASTING_MIN_TARGET_MINUTES = 720;
+export const FASTING_MAX_TARGET_MINUTES = 1380;
+export const fastingLogSchema = syncableBaseSchema.extend({
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime().optional(),
+  targetMinutes: z.number().int().min(FASTING_MIN_TARGET_MINUTES).max(FASTING_MAX_TARGET_MINUTES),
+});
+export type FastingLog = z.infer<typeof fastingLogSchema>;
+
 // Generic sync envelope — one push/pull protocol for every syncable table (ARCHITECTURE.md §3).
 export const syncTableNameSchema = z.enum([
   "food_log",
@@ -136,6 +147,7 @@ export const syncTableNameSchema = z.enum([
   "workout_set",
   "body_metric",
   "water_log",
+  "fasting_log",
 ]);
 export type SyncTableName = z.infer<typeof syncTableNameSchema>;
 

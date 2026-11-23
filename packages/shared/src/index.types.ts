@@ -11,3 +11,4 @@ export * from "./coach-safety.js";
 export * from "./meal-summary.js";
 export * from "./streak.js";
 export * from "./food-relevance.js";
+export * from "./fasting.js";

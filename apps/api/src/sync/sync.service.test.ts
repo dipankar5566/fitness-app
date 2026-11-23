@@ -138,6 +138,47 @@ describe("SyncService", () => {
       expect(client.query).not.toHaveBeenCalled();
     });
 
+    it("upserts a fasting_log row through the registry, account_id from the JWT", async () => {
+      client.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const row = {
+        id: "99999999-0000-0000-0000-000000000001",
+        accountId: "99999999-9999-9999-9999-999999999999", // must be ignored - account comes from the JWT
+        isDeleted: false,
+        updatedAt: "2026-11-23T20:00:00.000Z",
+        startedAt: "2026-11-23T20:00:00.000Z",
+        targetMinutes: 960,
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "fasting_log", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [row.id], rejected: [] });
+      expect(client.query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO app.fasting_log"),
+        expect.arrayContaining(["account-1", row.startedAt, null, 960]),
+      );
+    });
+
+    it("rejects a fasting_log row whose target exceeds the 23h safety cap as invalid", async () => {
+      const row = {
+        id: "99999999-0000-0000-0000-000000000002",
+        accountId: "99999999-9999-9999-9999-999999999999",
+        isDeleted: false,
+        updatedAt: "2026-11-23T20:00:00.000Z",
+        startedAt: "2026-11-23T20:00:00.000Z",
+        targetMinutes: 30 * 60,
+      };
+      const result = await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "fasting_log", op: "upsert", row }],
+      });
+
+      expect(result).toEqual({ applied: [], rejected: [{ id: row.id, reason: "invalid" }] });
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
     it("upserts a body_metric row through the registry, account_id from the JWT", async () => {
       client.query.mockResolvedValueOnce({ rowCount: 1 });
 
@@ -457,7 +498,8 @@ describe("SyncService", () => {
             },
           ],
         })
-        .mockResolvedValueOnce({ rows: [] }); // water_log
+        .mockResolvedValueOnce({ rows: [] }) // water_log
+        .mockResolvedValueOnce({ rows: [] }); // fasting_log
 
       const result = await service.pull("account-1", null);
 
@@ -491,7 +533,8 @@ describe("SyncService", () => {
               server_updated_at: serverUpdatedAt,
             },
           ],
-        });
+        })
+        .mockResolvedValueOnce({ rows: [] }); // fasting_log
 
       const result = await service.pull("account-1", null);
 
@@ -501,6 +544,41 @@ describe("SyncService", () => {
         table: "water_log",
         op: "upsert",
         row: { amountMl: 250 },
+      });
+    });
+
+    it("pulls an ended fasting_log row through the registry", async () => {
+      const serverUpdatedAt = new Date("2026-11-24T12:05:00.000Z");
+      db.query
+        .mockResolvedValueOnce({ rows: [] }) // food_log
+        .mockResolvedValueOnce({ rows: [] }) // custom_food
+        .mockResolvedValueOnce({ rows: [] }) // custom_food_ingredient
+        .mockResolvedValueOnce({ rows: [] }) // workout_session
+        .mockResolvedValueOnce({ rows: [] }) // workout_set
+        .mockResolvedValueOnce({ rows: [] }) // body_metric
+        .mockResolvedValueOnce({ rows: [] }) // water_log
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "99999999-0000-0000-0000-000000000003",
+              account_id: "account-1",
+              started_at: new Date("2026-11-23T20:00:00.000Z"),
+              ended_at: new Date("2026-11-24T12:00:00.000Z"),
+              target_minutes: 960,
+              is_deleted: false,
+              updated_at: new Date("2026-11-24T12:00:00.000Z"),
+              server_updated_at: serverUpdatedAt,
+            },
+          ],
+        });
+
+      const result = await service.pull("account-1", null);
+
+      expect(result.changes).toHaveLength(1);
+      expect(result.changes[0]).toMatchObject({
+        table: "fasting_log",
+        op: "upsert",
+        row: { targetMinutes: 960, endedAt: "2026-11-24T12:00:00.000Z" },
       });
     });
   });

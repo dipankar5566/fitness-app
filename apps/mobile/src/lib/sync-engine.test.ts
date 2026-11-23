@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDirty as getDirtyBodyMetrics, getLatest, insert as insertBodyMetric, type LocalBodyMetric } from "./body-metric-repo";
 import { getDirtyCustomFoods, insertCustomFood, listCustomFoods, type LocalCustomFood } from "./custom-food-repo";
+import { getDirty as getDirtyFasting, listRecent as listRecentFasts, start as startFast } from "./fasting-repo";
 import { getDirty, insert, listByLocalDay, type LocalFoodLogRow } from "./food-log-repo";
 import { getKv } from "./kv-store";
 import { createTestDb } from "./node-sqlite-test-db";
@@ -279,6 +280,48 @@ describe("sync-engine", () => {
     );
     expect(await getDirtyBodyMetrics(db)).toEqual([]);
     expect((await getLatest(db, "account-1", "weight_kg"))?.value).toBe(73); // the pulled row was applied
+  });
+
+  it("pushes a dirty fasting_log row (endedAt omitted while active) and applies a pulled one", async () => {
+    const { pushSync, pullSync } = await import("./api");
+    const activeId = "99999999-0000-0000-0000-000000000001";
+    (pushSync as ReturnType<typeof vi.fn>).mockResolvedValue({ applied: [activeId], rejected: [] });
+    (pullSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      changes: [
+        {
+          table: "fasting_log",
+          op: "upsert",
+          row: {
+            id: "99999999-0000-0000-0000-000000000002",
+            accountId: "account-1",
+            isDeleted: false,
+            updatedAt: "2026-11-22T12:00:00.000Z",
+            startedAt: "2026-11-21T20:00:00.000Z",
+            endedAt: "2026-11-22T12:00:00.000Z",
+            targetMinutes: 960,
+          },
+        },
+      ],
+      nextSyncToken: "2026-11-22T12:00:00.000Z",
+    });
+    await startFast(db, {
+      id: activeId,
+      accountId: "account-1",
+      startedAt: "2026-11-23T20:00:00.000Z",
+      targetMinutes: 960,
+      updatedAt: "2026-11-23T20:00:00.000Z",
+    });
+
+    const { syncNow } = await import("./sync-engine");
+    await syncNow(db, "http://localhost:3001", "token-1");
+
+    const pushed = (pushSync as ReturnType<typeof vi.fn>).mock.calls[0][2].rows.find(
+      (r: { table: string }) => r.table === "fasting_log",
+    );
+    expect(pushed.row).toMatchObject({ id: activeId, targetMinutes: 960 });
+    expect(pushed.row.endedAt).toBeUndefined();
+    expect(await getDirtyFasting(db)).toEqual([]);
+    expect((await listRecentFasts(db, "account-1")).map((r) => r.id)).toContain("99999999-0000-0000-0000-000000000002");
   });
 
   it("collapses overlapping calls into a single run", async () => {

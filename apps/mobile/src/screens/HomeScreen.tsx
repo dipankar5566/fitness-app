@@ -16,6 +16,7 @@ import { Alert, FlatList, Modal, Pressable, StyleSheet, View } from "react-nativ
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineSpark, MacroBar, ProgressRing } from "../components/Charts";
+import { FastingCard } from "../components/FastingCard";
 import { AppText, Button, Card, EmptyState, IconButton, SectionHeader, TextField } from "../components/ui";
 import {
   getCoachDailyInsight,
@@ -105,6 +106,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [weightInput, setWeightInput] = useState("");
   const [suggestions, setSuggestions] = useState<Partial<Record<MealDisplayType, FoodSearchResult[]>>>({});
   const [coachInsight, setCoachInsight] = useState<string | null>(null);
+  const [focusKey, setFocusKey] = useState(0);
 
   const loadEntries = useCallback(async (db: SqlDb) => {
     setEntries(await listByLocalDay(db, accountId, todayDate()));
@@ -271,6 +273,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   useFocusEffect(
     useCallback(() => {
       void refresh();
+      setFocusKey((key) => key + 1);
     }, [refresh]),
   );
 
@@ -408,6 +411,8 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
               One glass = {GLASS_ML} ml
             </AppText>
           </Card>
+
+          <FastingCard accountId={accountId} refreshKey={focusKey} />
 
           <Card style={{ marginTop: space.lg }}>
             <View style={styles.waterHeader}>

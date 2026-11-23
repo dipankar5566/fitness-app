@@ -55,7 +55,7 @@ const ED_SIGNAL_PATTERNS: RegExp[] = [
 
 /** A stated daily calorie count low enough to be a red flag on its own, independent of phrasing
  * (e.g. "500 calories a day") - checked numerically rather than by a brittle phrasing regex. */
-const ED_SIGNAL_CALORIE_THRESHOLD = 800;
+export const ED_SIGNAL_CALORIE_THRESHOLD = 800;
 
 export function detectEdSignal(message: string): boolean {
   if (ED_SIGNAL_PATTERNS.some((pattern) => pattern.test(message))) {

@@ -1,6 +1,6 @@
 import type { SqlDb } from "./sql-db";
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 /**
  * Local SQLite mirror for offline sync (ARCHITECTURE.md section 3). `food_log` mirrors app.food_log
@@ -184,6 +184,26 @@ export async function migrate(db: SqlDb): Promise<void> {
     `);
     await db.execAsync(
       "CREATE INDEX IF NOT EXISTS water_log_account_day_idx ON water_log (account_id, recorded_at)",
+    );
+  }
+
+  if (currentVersion < 7) {
+    // fasting_log mirrors app.fasting_log (0011), same outbox shape as water_log. ended_at is NULL
+    // while a fast is in progress. New table, so CREATE IF NOT EXISTS is inherently self-healing.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS fasting_log (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        target_minutes INTEGER NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        is_dirty INTEGER NOT NULL DEFAULT 1
+      )
+    `);
+    await db.execAsync(
+      "CREATE INDEX IF NOT EXISTS fasting_log_account_start_idx ON fasting_log (account_id, started_at)",
     );
   }
 
