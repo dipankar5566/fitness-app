@@ -424,6 +424,24 @@ status bar - fixed via `Screen`'s new `edges` prop), and `ListRow`'s subtitle ha
 removing it and capitalizing only the one genuinely single-word case, `FoodSearchScreen`'s food
 type, at the call site). `pnpm lint && pnpm typecheck && pnpm test` all pass throughout.
 
+**Second redesign pass: dark mode, a Progress tab, and an onboarding rebuild (cross-cutting, not a
+roadmap milestone) - all 10 planned stages now done.** `docs/REDESIGN_CHANGELOG.md` has the
+stage-by-stage history; `docs/QA_REPORT.md`/`docs/KNOWN_ISSUES.md` have what was and wasn't
+verified live. Summary: a full `ThemeProvider`/`useTheme()`/`makeStyles()` architecture replaced
+the static `colors` import everywhere (every screen, confirmed via `theme/contrast.test.ts`'s real
+WCAG contrast-ratio checks on both palettes - which caught and fixed a genuine light-theme
+`textTertiary` contrast deficiency, not just an eyeballed pass); a new **Progress** tab (5th bottom
+tab) built entirely from the local SQLite mirror via two new read-only repo queries and
+`packages/shared/src/progress.ts`'s pure aggregation (no new API call, no schema change); and
+`OnboardingScreen` rebuilt with structured DOB/height/weight `Stepper`s, a welcome step, and a
+targets-summary step previewing `calculateMacroTargets` (a same-screen preview only - `PUT
+/profile` still computes and stores the real targets). Two real bugs were caught live during this
+pass, both fixed: three DOB `Stepper`s crammed into one row shrank their +/- buttons below the
+48dp touch-target floor and clipped a 4-digit year; and the contrast test itself, described above.
+Deliberately not done this pass (`docs/KNOWN_ISSUES.md` has the full list): fill animations +
+reduced-motion handling, skeleton loaders, a Snackbar component, a 200% font-scale audit, and
+compact/large density screenshots.
+
 **HealthifyMe-informed feature expansion (cross-cutting, clean-room - not a roadmap milestone).**
 Feature *ideas* from the `healthifyme-re/` teardown, each built from scratch on our own
 cleanly-licensed data - **nothing copied** from their app, and their SQLCipher-encrypted
