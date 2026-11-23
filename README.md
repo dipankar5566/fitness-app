@@ -68,9 +68,9 @@ cd db
 DATABASE_URL=postgresql://postgres@localhost:5432/indb pnpm migrate
 cd ..
 
-# Run the API (port 3000 is often taken locally — use 3001)
+# Run the API (port 3000 is often taken locally — use 3011; 3001 is reserved by another app on this machine)
 cd apps/api
-DATABASE_URL=postgresql://postgres@localhost:5432/indb JWT_SECRET=<dev-secret> PORT=3001 pnpm dev
+DATABASE_URL=postgresql://postgres@localhost:5432/indb JWT_SECRET=<dev-secret> PORT=3011 pnpm dev
 ```
 
 ```bash

@@ -666,6 +666,6 @@ pnpm test                     # turbo run test (per-package vitest run)
 # db (run from db/, needs the password available via PGPASSWORD or pgpass.conf, never inline)
 DATABASE_URL=postgresql://postgres@localhost:5432/indb pnpm migrate
 
-# apps/api (run from apps/api/; port 3000 is often taken by something else on this machine - use 3001)
-DATABASE_URL=postgresql://postgres@localhost:5432/indb JWT_SECRET=<dev-secret> PORT=3001 pnpm dev
+# apps/api (run from apps/api/; port 3000 is often taken by something else on this machine - use 3011; 3001 is permanently reserved by an unrelated production app, Urvar ERP)
+DATABASE_URL=postgresql://postgres@localhost:5432/indb JWT_SECRET=<dev-secret> PORT=3011 pnpm dev
 ```
