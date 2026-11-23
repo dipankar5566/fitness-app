@@ -53,6 +53,12 @@ finalised and applied.
 Exit criteria: closed beta live on Play with real testers; export & delete both work end-to-end; zero
 P0 bugs open; crash-free ≥ 99 % in internal testing.
 
+**Folded into M6 (done early, clean-room from the HealthifyMe teardown):** regional/Hinglish food
+aliases + meal-relevance + "report missing food"; water/weight/sleep Today trackers (water is the
+7th syncable table); per-meal calorie budgets + next-food suggestions; coach starter-prompt chips +
+a cached daily-insight card. Built on our own licensed data only — their encrypted food DB was not
+used. See CLAUDE.md's "HealthifyMe-informed feature expansion" section.
+
 ## Post-beta (Weeks 13–24, not blocking beta)
 Voice meal logging · social (friends, gym groups, feed) · AI-generated weekly workout + meal plans ·
 restaurant-chain dish database expansion · revenue model implementation · iOS · regional-language UI ·

@@ -424,6 +424,35 @@ status bar - fixed via `Screen`'s new `edges` prop), and `ListRow`'s subtitle ha
 removing it and capitalizing only the one genuinely single-word case, `FoodSearchScreen`'s food
 type, at the call site). `pnpm lint && pnpm typecheck && pnpm test` all pass throughout.
 
+**HealthifyMe-informed feature expansion (cross-cutting, clean-room - not a roadmap milestone).**
+Feature *ideas* from the `healthifyme-re/` teardown, each built from scratch on our own
+cleanly-licensed data - **nothing copied** from their app, and their SQLCipher-encrypted
+`SecuredHealthifyMe.sqlite` was deliberately **not** decrypted or used (circumventing its protection
++ reusing a proprietary unlicensed dataset was declined; Phase A delivers the same capability from
+INDB/USDA + our own curated data instead). All verified against the real `indb` DB or unit-tested;
+UI cards are typecheck/lint-clean with on-device verification still pending.
+- **Food search quality.** `app.food_alias` (`0006`) - our own Hinglish/regional aliases
+  (chawal→rice, anda→egg...) keyed by indb code, same read-only-`public` convention as
+  `food_diet_class`; loaded by `db/seed-food-alias.ts` (`pnpm seed:aliases`) from a reviewed CSV
+  (`db/data/food-alias.csv`). `FoodService.search` unions alias hits with `search_foods()` (exact
+  alias scores 1.5, above the fuzzy range, so a staple term surfaces its plain ingredient).
+  `app.food_meal_relevance` (`0007`) + pure `scoreMealRelevance`/`mealPriorForName`
+  (`packages/shared/src/food-relevance.ts`), backfilled by `db/backfill-meal-relevance.ts`
+  (`pnpm backfill:relevance`). `app.food_report` (`0008`) + `POST /food/report` (auth) +
+  FoodSearchScreen "Can't find it?" footer.
+- **Today trackers.** `app.water_log` (`0009`) is the **seventh syncable table** (full
+  adapter + `water-repo.ts` outbox + `sync-engine` wiring, db-schema v6); Home water +/- card with
+  `waterGoalMl` (shared). Weight-trend card (`LineSpark` in `Charts.tsx`, `body-metric-repo.listRecent`,
+  manual-entry modal). Health Connect **sleep** read (`readTodaySleep`, opt-in `HcSettings.sleep`).
+- **Per-meal budgets + suggestions.** `splitMealBudgets` (shared) → "eaten / budget" per meal;
+  `GET /food/suggestions?mealType&dietType` (open, meal-relevance-ranked) → tappable chips under
+  each Home meal section.
+- **Coach upgrades.** `COACH_PROMPT_SUGGESTIONS` chips on an empty thread; `app.coach_daily_insight`
+  (`0010`) + `CoachService.dailyInsight` + `GET /coach/daily-insight` - grounded, guardrailed,
+  cached one AI call/account/day, shown as a tappable Today card. (SSE streaming deferred.)
+- **Deferred to post-beta (confirmed wanted):** AI diet-plan generator, intermittent fasting,
+  gamification, home-screen widget, and deeper open-dataset imports (USDA/OFF-India/IFCT).
+
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
 now uses `unplugin-swc` with `decoratorMetadata: true` instead. Verified with `AuthService`'s test
