@@ -1,5 +1,5 @@
 import type { MealType } from "@fitness-app/shared";
-import { createNavigationContainerRef, NavigationContainer } from "@react-navigation/native";
+import { createNavigationContainerRef, DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef } from "react";
 import { Linking } from "react-native";
@@ -26,7 +26,7 @@ import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { ProgramsScreen } from "../screens/ProgramsScreen";
 import { RemindersScreen } from "../screens/RemindersScreen";
 import { WorkoutSessionScreen } from "../screens/WorkoutSessionScreen";
-import { colors, fontFamily } from "../theme";
+import { fontFamily, useTheme } from "../theme";
 
 export interface PickedIngredient {
   foodRef: string;
@@ -114,9 +114,18 @@ function useWidgetDeepLinks() {
 
 export function RootNavigator() {
   const flushDeepLink = useWidgetDeepLinks();
+  const { colors, scheme } = useTheme();
+  // React Navigation's own light/dark theme objects control things this app doesn't otherwise
+  // touch (the native modal backdrop, the default header back button tint) - layered under our
+  // own explicit screenOptions below, not replacing them.
+  const navTheme = scheme === "dark" ? DarkTheme : DefaultTheme;
   return (
     <NavigationContainer
       ref={navigationRef}
+      theme={{
+        ...navTheme,
+        colors: { ...navTheme.colors, background: colors.bg, card: colors.surface, text: colors.text, border: colors.stroke, primary: colors.primary },
+      }}
       onReady={() => void flushDeepLink()}
       onStateChange={() => void flushDeepLink()}
     >

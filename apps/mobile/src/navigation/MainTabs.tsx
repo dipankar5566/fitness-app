@@ -4,7 +4,7 @@ import { createBottomTabNavigator, type BottomTabScreenProps } from "@react-navi
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { HomeScreen } from "../screens/HomeScreen";
 import { LogTabScreen, MeTabScreen, WorkoutTabScreen } from "../screens/TabScreens";
-import { colors, textVariants } from "../theme";
+import { textVariants, useTheme } from "../theme";
 import type { RootStackParamList } from "./RootNavigator";
 
 /**
@@ -42,6 +42,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
 export function MainTabs({ route }: Props) {
   const { accountId } = route.params;
+  const { colors } = useTheme();
 
   return (
     <Tab.Navigator

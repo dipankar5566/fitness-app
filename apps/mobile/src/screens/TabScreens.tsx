@@ -1,6 +1,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
+import { ChipSelect } from "../components/ChipSelect";
 import { AppText, Badge, Card, ListRow, Screen, SectionHeader } from "../components/ui";
 import { getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
@@ -9,13 +10,20 @@ import { API_URL } from "../lib/env";
 import { CACHED_GOAL_KEY, CACHED_PROFILE_KEY, getKv } from "../lib/kv-store";
 import { getActiveSession, listSetsForSession } from "../lib/workout-repo";
 import type { MainTabScreenProps } from "../navigation/MainTabs";
-import { colors, space } from "../theme";
+import { makeStyles, space, tabularNumbers, useTheme, type ThemePreference } from "../theme";
 
 /**
  * The three simpler tabs (Log/Workout/Me) - kept in one file since each is a short menu/summary
  * screen built entirely from reusable components, unlike Today (HomeScreen.tsx, the hero of the
  * redesign) or the flow screens (which each have their own file as before).
  */
+
+const useDividerStyles = makeStyles((colors) => ({ divider: { height: 1, backgroundColor: colors.separator } }));
+
+function Divider() {
+  const styles = useDividerStyles();
+  return <View style={styles.divider} />;
+}
 
 // ---------------------------------------------------------------------------
 // Log tab - quick entry points into every logging flow.
@@ -81,6 +89,7 @@ export function LogTabScreen({ navigation, route }: MainTabScreenProps<"Log">) {
 
 export function WorkoutTabScreen({ navigation, route }: MainTabScreenProps<"Workout">) {
   const { accountId } = route.params;
+  const { colors } = useTheme();
   const [setCount, setSetCount] = useState<number | null>(null);
   const [hasActiveSession, setHasActiveSession] = useState(false);
 
@@ -141,11 +150,29 @@ export function WorkoutTabScreen({ navigation, route }: MainTabScreenProps<"Work
 }
 
 // ---------------------------------------------------------------------------
-// Me tab - current targets + account-level links.
+// Me tab - targets, grouped settings, and the theme picker. Regrouped per
+// docs/UI_UX_AUDIT.md M2/M3: the raw account id no longer sits bare on screen (it's now a
+// labelled, long-press-selectable row via RN's native `selectable` text - no new dependency
+// needed for "copy" since Android's own text-selection toolbar already offers Copy), and "More"
+// is split into Preferences/Activity/About instead of one undifferentiated list.
 // ---------------------------------------------------------------------------
+
+const THEME_PREFERENCE_OPTIONS: readonly ThemePreference[] = ["system", "light", "dark"];
+const THEME_PREFERENCE_LABELS: Record<ThemePreference, string> = {
+  system: "System",
+  light: "Light",
+  dark: "Dark",
+};
+
+const useMeStyles = makeStyles((colors) => ({
+  idLabel: { marginBottom: space.xxs },
+  idValue: { color: colors.textSecondary, ...tabularNumbers },
+}));
 
 export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
   const { accountId } = route.params;
+  const { colors, preference, setPreference } = useTheme();
+  const styles = useMeStyles();
   const [profile, setProfile] = useState<GetProfileResponse | null>(null);
 
   const refresh = useCallback(async () => {
@@ -180,11 +207,11 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
     <Screen scroll edges={["top", "bottom"]}>
       <AppText variant="h1" style={{ marginBottom: space.lg }}>Me</AppText>
 
+      <SectionHeader title="Daily target" />
       <Card>
-        <SectionHeader title="Daily target" />
         {goal ? (
           <>
-            <AppText variant="h1" numbers>{Math.round(Number(goal.target_kcal))} kcal</AppText>
+            <AppText variant="display" numbers>{Math.round(Number(goal.target_kcal))} kcal</AppText>
             <AppText variant="body" color={colors.textSecondary} numbers style={{ marginTop: space.xxs }}>
               {Math.round(Number(goal.target_protein_g))}g protein · {Math.round(Number(goal.target_carb_g))}g carb ·{" "}
               {Math.round(Number(goal.target_fat_g))}g fat
@@ -200,7 +227,22 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
         )}
       </Card>
 
-      <SectionHeader title="More" style={{ marginTop: space.xxl }} />
+      <SectionHeader title="Preferences" style={{ marginTop: space.xxl }} />
+      <Card>
+        <ChipSelect
+          label="Appearance"
+          options={THEME_PREFERENCE_OPTIONS}
+          value={preference}
+          onChange={setPreference}
+          formatOption={(value) => THEME_PREFERENCE_LABELS[value]}
+        />
+        <Divider />
+        <ListRow icon="bell-outline" title="Reminders" onPress={() => navigation.navigate("Reminders", { accountId })} />
+        <Divider />
+        <ListRow icon="heart-pulse" title="Health Connect" onPress={() => navigation.navigate("HealthConnect", { accountId })} />
+      </Card>
+
+      <SectionHeader title="Activity" style={{ marginTop: space.xxl }} />
       <Card>
         <ListRow
           icon="trophy-outline"
@@ -213,10 +255,6 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
         <Divider />
         <ListRow icon="calendar-check-outline" title="Programs" onPress={() => navigation.navigate("Programs", { accountId })} />
         <Divider />
-        <ListRow icon="bell-outline" title="Reminders" onPress={() => navigation.navigate("Reminders", { accountId })} />
-        <Divider />
-        <ListRow icon="heart-pulse" title="Health Connect" onPress={() => navigation.navigate("HealthConnect", { accountId })} />
-        <Divider />
         <ListRow
           icon="robot-happy-outline"
           title="Coach"
@@ -225,13 +263,14 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
         />
       </Card>
 
-      <AppText variant="caption" color={colors.textTertiary} center style={{ marginTop: space.xxl }}>
-        {accountId}
-      </AppText>
+      <SectionHeader title="About" style={{ marginTop: space.xxl }} />
+      <Card>
+        <AppText variant="label" color={colors.textSecondary} style={styles.idLabel}>Account ID</AppText>
+        <Text selectable style={styles.idValue}>{accountId}</Text>
+        <AppText variant="micro" color={colors.textTertiary} style={{ marginTop: space.xs }}>
+          Long-press to select and copy.
+        </AppText>
+      </Card>
     </Screen>
   );
-}
-
-function Divider() {
-  return <View style={{ height: 1, backgroundColor: colors.separator }} />;
 }

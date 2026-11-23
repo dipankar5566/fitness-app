@@ -223,6 +223,7 @@ export function MealPlanScreen({ navigation, route }: Props) {
                   </View>
                   <IconButton
                     icon="swap-horizontal"
+                    label={`Swap ${item.foodName}`}
                     onPress={() => navigation.navigate("FoodSearch", { accountId, mode: "swapPlanItem", mealItemIndex: index })}
                   />
                 </View>

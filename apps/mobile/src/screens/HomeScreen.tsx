@@ -13,7 +13,7 @@ import { waterGoalMl } from "@fitness-app/shared";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import * as Crypto from "expo-crypto";
-import { Alert, FlatList, Modal, Pressable, StyleSheet, View } from "react-native";
+import { Alert, FlatList, Modal, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineSpark, MacroBar, ProgressRing } from "../components/Charts";
@@ -59,7 +59,7 @@ import type { SqlDb } from "../lib/sql-db";
 import { syncNow } from "../lib/sync-engine";
 import { getActiveSession, listSetsForSession } from "../lib/workout-repo";
 import type { MainTabScreenProps } from "../navigation/MainTabs";
-import { colors, radius, space } from "../theme";
+import { makeStyles, radius, space, useTheme } from "../theme";
 
 /** How far back to look for the streak calculation - well beyond any realistic streak length, so
  * this is really just a bound on the local query, not a cap on the streak itself. */
@@ -90,8 +90,90 @@ function sumMacro(entries: LocalFoodLogRow[], key: "proteinG" | "fatG" | "carbG"
   return entries.reduce((sum, entry) => sum + (entry.macros?.[key] ?? 0), 0);
 }
 
+const useStyles = makeStyles((colors) => ({
+  container: { flex: 1, backgroundColor: colors.bg },
+  list: { flex: 1 },
+  content: { padding: space.lg, paddingBottom: space.xxxl },
+  titleRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  streakChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accentTonal,
+  },
+  levelChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryTonal,
+  },
+  heroCard: { alignItems: "center", marginTop: space.sm },
+  badgeBanner: { flexDirection: "row", alignItems: "center", backgroundColor: colors.accentTonal },
+  macroBars: { width: "100%", gap: space.sm, marginTop: space.lg },
+  quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
+  waterHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  waterControls: { flexDirection: "row", alignItems: "center" },
+  insightCard: { flexDirection: "row", alignItems: "center" },
+  suggestionRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginTop: space.sm },
+  suggestionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    maxWidth: "100%",
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryTonal,
+  },
+  suggestionChipPressed: { opacity: 0.7 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: colors.scrim,
+    justifyContent: "center",
+    paddingHorizontal: space.xl,
+  },
+  modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.lg },
+  quickAction: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: space.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.stroke,
+  },
+  quickActionPressed: { opacity: 0.7 },
+  workoutCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    marginTop: space.lg,
+    padding: space.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.stroke,
+  },
+  workoutCardPressed: { opacity: 0.7 },
+  mealSection: { marginTop: space.xxl },
+  entryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.separator,
+  },
+  entryRowPressed: { opacity: 0.6 },
+}));
+
 export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const { accountId } = route.params;
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [goal, setGoal] = useState<Goal>(null);
   const [entries, setEntries] = useState<LocalFoodLogRow[]>([]);
   const [activeWorkoutSets, setActiveWorkoutSets] = useState<number | null>(null);
@@ -346,8 +428,9 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
               <View style={{ flexDirection: "row", gap: space.xs }}>
                 {level !== null ? (
                   <Pressable
-                    style={[styles.streakChip, { backgroundColor: colors.primaryTonal }]}
+                    style={styles.levelChip}
                     onPress={() => navigation.navigate("Achievements", { accountId })}
+                    accessibilityRole="button"
                     accessibilityLabel={`Level ${level}, view achievements`}
                   >
                     <MaterialCommunityIcons name="trophy-outline" size={16} color={colors.primary} />
@@ -357,7 +440,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
                   </Pressable>
                 ) : null}
                 {streak && streak.length > 0 ? (
-                  <View style={styles.streakChip}>
+                  <View style={styles.streakChip} accessible accessibilityLabel={`${streak.length} day logging streak`}>
                     <MaterialCommunityIcons name="fire" size={16} color={colors.accent} />
                     <AppText variant="captionMedium" numbers color={colors.accent} style={{ marginLeft: 2 }}>
                       {streak.length}
@@ -387,14 +470,18 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
                   {newBadges.length === 1 ? newBadges[0].description : newBadges.map((b) => b.title).join(", ")}
                 </AppText>
               </Pressable>
-              <IconButton icon="close" onPress={() => void dismissNewBadges()} />
+              <IconButton icon="close" label="Dismiss new badge notification" onPress={() => void dismissNewBadges()} />
             </Card>
           ) : null}
 
           {goal ? (
             <Card style={styles.heroCard}>
-              <ProgressRing progress={progress} color={remaining < 0 ? colors.error : colors.primary}>
-                <AppText variant="h1" numbers>{Math.abs(remaining)}</AppText>
+              <ProgressRing
+                progress={progress}
+                color={remaining < 0 ? colors.error : colors.primary}
+                accessibilityLabel={`${Math.abs(remaining)} kilocalories ${remaining < 0 ? "over target" : "left today"}`}
+              >
+                <AppText variant="display" numbers>{Math.abs(remaining)}</AppText>
                 <AppText variant="caption" color={colors.textSecondary}>
                   kcal {remaining < 0 ? "over" : "left"}
                 </AppText>
@@ -451,11 +538,16 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
                 ) : null}
               </View>
               <View style={styles.waterControls}>
-                <IconButton icon="minus-circle-outline" onPress={() => void adjustWater("remove")} color={colors.textSecondary} />
+                <IconButton
+                  icon="minus-circle-outline"
+                  label="Remove a glass of water"
+                  onPress={() => void adjustWater("remove")}
+                  color={colors.textSecondary}
+                />
                 <AppText variant="bodyMedium" numbers style={{ marginHorizontal: space.sm, minWidth: 92, textAlign: "center" }}>
                   {(waterMl / 1000).toFixed(2)} / {(waterGoal / 1000).toFixed(1)} L
                 </AppText>
-                <IconButton icon="plus-circle" onPress={() => void adjustWater("add")} color={colors.primary} />
+                <IconButton icon="plus-circle" label="Add a glass of water" onPress={() => void adjustWater("add")} color={colors.primary} />
               </View>
             </View>
             <AppText variant="micro" color={colors.textTertiary} style={{ marginTop: space.xs }}>
@@ -477,7 +569,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
             </View>
             {weightReadings.length >= 2 ? (
               <View style={{ marginTop: space.sm, alignItems: "center" }}>
-                <LineSpark values={[...weightReadings].reverse().map((r) => r.value ?? 0)} />
+                <LineSpark values={[...weightReadings].reverse().map((r) => r.value ?? 0)} unit=" kg" />
               </View>
             ) : (
               <AppText variant="micro" color={colors.textTertiary} style={{ marginTop: space.xs }}>
@@ -497,6 +589,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
 
           <Pressable
             onPress={() => navigation.navigate("WorkoutSession", { accountId })}
+            accessibilityRole="button"
             style={({ pressed }) => [styles.workoutCard, pressed && styles.workoutCardPressed]}
           >
             <MaterialCommunityIcons name="dumbbell" size={22} color={colors.primary} />
@@ -521,6 +614,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
               <Pressable style={styles.modalCard} onPress={() => undefined}>
                 <AppText variant="h3">Log weight</AppText>
                 <TextField
+                  label="Weight"
                   placeholder="kg"
                   keyboardType="decimal-pad"
                   value={weightInput}
@@ -560,6 +654,9 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
               <Pressable
                 key={entry.id}
                 onLongPress={() => handleDelete(entry)}
+                accessibilityRole="button"
+                accessibilityLabel={`${entry.foodName ?? "Unknown food"}, ${entry.quantity} ${entry.unit}, ${entry.macros?.kcal ?? "unknown"} kilocalories`}
+                accessibilityHint="Long press to delete"
                 style={({ pressed }) => [styles.entryRow, pressed && styles.entryRowPressed]}
               >
                 <View style={{ flex: 1 }}>
@@ -569,7 +666,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
                   <AppText variant="caption" color={colors.textSecondary} numbers>
                     {entry.quantity} {entry.unit}
                   </AppText>
-                  {entry.isEstimate ? <AppText variant="micro" color={colors.warning}>estimate</AppText> : null}
+                  {entry.isEstimate ? <AppText variant="caption" color={colors.warning}>estimate</AppText> : null}
                 </View>
                 <AppText variant="bodyMedium" numbers color={colors.textSecondary}>
                   {entry.macros?.kcal ?? "?"} kcal
@@ -589,6 +686,8 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
                       presetMealType: group.mealType,
                     })
                   }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Log ${item.name}`}
                   style={({ pressed }) => [styles.suggestionChip, pressed && styles.suggestionChipPressed]}
                 >
                   <MaterialCommunityIcons name="plus" size={13} color={colors.primary} />
@@ -624,82 +723,17 @@ function QuickAction({
   label: string;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.quickAction, pressed && styles.quickActionPressed]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.quickAction, pressed && styles.quickActionPressed]}
+    >
       <MaterialCommunityIcons name={icon} size={22} color={colors.primary} />
       <AppText variant="captionMedium" style={{ marginTop: space.xs }}>{label}</AppText>
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  list: { flex: 1 },
-  content: { padding: space.lg, paddingBottom: space.xxxl },
-  titleRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-  streakChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: space.sm,
-    paddingVertical: space.xs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.accentTonal,
-  },
-  heroCard: { alignItems: "center", marginTop: space.sm },
-  badgeBanner: { flexDirection: "row", alignItems: "center", backgroundColor: colors.accentTonal },
-  macroBars: { width: "100%", gap: space.sm, marginTop: space.lg },
-  quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
-  waterHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  waterControls: { flexDirection: "row", alignItems: "center" },
-  insightCard: { flexDirection: "row", alignItems: "center" },
-  suggestionRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginTop: space.sm },
-  suggestionChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    maxWidth: "100%",
-    paddingVertical: space.xs,
-    paddingHorizontal: space.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryTonal,
-  },
-  suggestionChipPressed: { opacity: 0.7 },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    paddingHorizontal: space.xl,
-  },
-  modalCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.lg },
-  quickAction: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: space.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.stroke,
-  },
-  quickActionPressed: { opacity: 0.7 },
-  workoutCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-    marginTop: space.lg,
-    padding: space.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.stroke,
-  },
-  workoutCardPressed: { opacity: 0.7 },
-  mealSection: { marginTop: space.xxl },
-  entryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.separator,
-  },
-  entryRowPressed: { opacity: 0.6 },
-});

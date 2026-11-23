@@ -175,7 +175,7 @@ export function CoachChatScreen({ route }: Props) {
           multiline
           editable={!isSending}
         />
-        <IconButton icon="send" onPress={() => void handleSend()} color={colors.primary} size={26} />
+        <IconButton icon="send" label="Send message" onPress={() => void handleSend()} color={colors.primary} size={26} />
       </View>
     </KeyboardAvoidingView>
   );

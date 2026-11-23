@@ -11,7 +11,7 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
 import { useCallback, useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
@@ -19,7 +19,7 @@ import { end as endFast, listRecent, start as startFast, type LocalFastingLog } 
 import { listByLocalDay } from "../lib/food-log-repo";
 import { cancelFastCompleteNotification, scheduleFastCompleteNotification } from "../lib/reminders";
 import { syncNow } from "../lib/sync-engine";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 import { ChipSelect } from "./ChipSelect";
 import { ProgressRing } from "./Charts";
 import { AppText, Button, Card } from "./ui";
@@ -40,6 +40,11 @@ interface FastingCardProps {
   onChange?: () => void;
 }
 
+const useStyles = makeStyles(() => ({
+  header: { flexDirection: "row", alignItems: "center" },
+  activeRow: { flexDirection: "row", alignItems: "center", marginTop: space.md },
+}));
+
 /**
  * Today's intermittent-fasting card (PRD §5.1 "IF window mode"). Storage is fasting-repo.ts (the
  * local outbox, synced via /sync); all window math is packages/shared's fasting.ts. Safety: presets
@@ -47,6 +52,8 @@ interface FastingCardProps {
  * the card shows support resources instead of offering to start a fast.
  */
 export function FastingCard({ accountId, refreshKey, onChange }: FastingCardProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [rows, setRows] = useState<LocalFastingLog[]>([]);
   const [preset, setPreset] = useState(DEFAULT_PRESET);
   const [caution, setCaution] = useState(false);
@@ -159,11 +166,18 @@ function ActiveFast({
   busy: boolean;
   onEnd: () => void;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const progress = fastingProgress(fast.startedAt, fast.targetMinutes, now);
   const opensAt = fastTargetReachedAt(fast.startedAt, fast.targetMinutes);
   return (
     <View style={styles.activeRow}>
-      <ProgressRing progress={progress.fraction} size={96} strokeWidth={9}>
+      <ProgressRing
+        progress={progress.fraction}
+        size={96}
+        strokeWidth={9}
+        accessibilityLabel={`Fasting progress: ${formatFastingDuration(progress.elapsedMinutes)} elapsed`}
+      >
         <AppText variant="captionMedium" numbers>{formatFastingDuration(progress.elapsedMinutes)}</AppText>
       </ProgressRing>
       <View style={{ flex: 1, marginLeft: space.lg }}>
@@ -185,8 +199,3 @@ function ActiveFast({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center" },
-  activeRow: { flexDirection: "row", alignItems: "center", marginTop: space.md },
-});

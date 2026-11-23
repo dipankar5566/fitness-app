@@ -8,8 +8,15 @@ import { API_URL } from "./lib/env";
 import { applyReminderSchedule, loadReminderSettings } from "./lib/reminders";
 import { onSyncSettled, syncNow } from "./lib/sync-engine";
 import { RootNavigator } from "./navigation/RootNavigator";
-import { useInterFonts } from "./theme";
+import { ThemeProvider, useInterFonts, useTheme } from "./theme";
 import { refreshTodayWidget } from "./widget/refresh";
+
+/** Split out so it renders inside ThemeProvider and can read the resolved scheme for the status
+ * bar - App itself can't call useTheme() above the provider that supplies it. */
+function ThemedStatusBar() {
+  const { colors } = useTheme();
+  return <StatusBar style={colors.statusBarStyle} />;
+}
 
 async function triggerSync(): Promise<void> {
   const [db, session] = await Promise.all([getDatabase(), loadGuestSession()]);
@@ -52,8 +59,10 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <RootNavigator />
-      <StatusBar style="auto" />
+      <ThemeProvider>
+        <RootNavigator />
+        <ThemedStatusBar />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

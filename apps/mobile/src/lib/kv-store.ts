@@ -24,6 +24,11 @@ export const HC_SETTINGS_KEY = "health_connect_settings";
 // Per-device UI state, so kv rather than a synced table - badges themselves are derived, not stored.
 export const ACHIEVEMENTS_SEEN_KEY = "achievements_seen";
 
+// ThemeProvider.tsx writes this (one of "system"/"light"/"dark") whenever the user picks a theme
+// from the Me tab; it reads it back once on mount so the choice survives a restart. Per-device,
+// like the reminder/Health-Connect settings above - no reason to sync a display preference.
+export const THEME_PREFERENCE_KEY = "theme_preference";
+
 export async function getKv(db: SqlDb, key: string): Promise<string | null> {
   const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM kv WHERE key = ?", [key]);
   return row?.value ?? null;
