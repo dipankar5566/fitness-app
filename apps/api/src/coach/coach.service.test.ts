@@ -163,4 +163,41 @@ describe("CoachService", () => {
       expect(result.map((row) => row.id)).toEqual(["1", "2"]);
     });
   });
+
+  describe("dailyInsight", () => {
+    it("returns a cached insight without calling the model", async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ content: "You're 300 kcal under target - nice work." }] });
+
+      const result = await service.dailyInsight("account-1");
+
+      expect(result).toEqual({ insight: "You're 300 kcal under target - nice work." });
+      expect(ai.chat).not.toHaveBeenCalled();
+    });
+
+    it("generates, guardrail-checks and caches an insight on a cache miss", async () => {
+      db.query.mockResolvedValue({ rows: [] }); // cache miss, then INSERT
+      profile.getProfile.mockResolvedValue({ profile: onboardedProfile, goal: activeGoal });
+      profile.getLatestWeightKg.mockResolvedValue(75);
+      // No sub-floor calorie number, so the floor guardrail leaves it untouched (that guardrail is
+      // exercised in sendMessage's tests); this test is about the generate-then-cache path.
+      ai.chat.mockResolvedValue("Great protein progress today - a paneer bhurji would round out dinner.");
+
+      const result = await service.dailyInsight("account-1");
+
+      expect(result?.insight).toContain("paneer");
+      expect(ai.chat).toHaveBeenCalledTimes(1);
+      // The last db.query is the cache INSERT.
+      const insertCall = db.query.mock.calls.at(-1)!;
+      expect(insertCall[0]).toContain("INSERT INTO app.coach_daily_insight");
+    });
+
+    it("returns null (no model call) before onboarding", async () => {
+      db.query.mockResolvedValueOnce({ rows: [] }); // cache miss
+      profile.getProfile.mockResolvedValue({ profile: null, goal: null });
+      profile.getLatestWeightKg.mockResolvedValue(null);
+
+      expect(await service.dailyInsight("account-1")).toBeNull();
+      expect(ai.chat).not.toHaveBeenCalled();
+    });
+  });
 });

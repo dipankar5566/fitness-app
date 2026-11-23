@@ -492,3 +492,23 @@ export async function getCoachHistory(apiUrl: string, accessToken: string): Prom
   }
   return z.array(coachMessageRowSchema).parse(await response.json());
 }
+
+/** Cached once-a-day grounded insight for the Today screen. Returns null before onboarding (server
+ * sends an empty body) or on a 403 quota cap - the card simply isn't shown in those cases. */
+export async function getCoachDailyInsight(apiUrl: string, accessToken: string): Promise<string | null> {
+  const response = await fetch(`${apiUrl}/coach/daily-insight`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (response.status === 403) {
+    return null; // daily AI quota reached - just omit the insight
+  }
+  if (!response.ok) {
+    throw new ApiError(`coach daily insight failed with status ${response.status}`);
+  }
+  const text = await response.text();
+  if (!text) {
+    return null; // not onboarded yet
+  }
+  const parsed = z.object({ insight: z.string() }).nullable().parse(JSON.parse(text));
+  return parsed?.insight ?? null;
+}

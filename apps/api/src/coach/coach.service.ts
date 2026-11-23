@@ -91,6 +91,56 @@ export class CoachService {
     return { reply };
   }
 
+  /**
+   * A short, encouraging "insight" about the account's day so far, for the Today screen. Cached
+   * once per account per day in app.coach_daily_insight (0010) - a same-day call returns the cached
+   * text without touching the model, so this costs at most one AI call per account per day. The
+   * same grounding and below-floor calorie guardrail as sendMessage apply; it never writes to the
+   * chat history. Returns null when the account hasn't onboarded (no targets to speak to).
+   */
+  async dailyInsight(accountId: string): Promise<{ insight: string } | null> {
+    const today = new Date().toISOString().slice(0, 10);
+    const cached = await this.db.query<{ content: string }>(
+      "SELECT content FROM app.coach_daily_insight WHERE account_id = $1 AND insight_date = $2",
+      [accountId, today],
+    );
+    if (cached.rows[0]) {
+      return { insight: cached.rows[0].content };
+    }
+
+    const { systemPrompt, floor } = await this.buildSystemPrompt(accountId);
+    if (!floor) {
+      // Not onboarded yet - no targets/biometrics to ground an insight in; skip rather than guess.
+      return null;
+    }
+
+    const messages: ChatMessage[] = [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content:
+          "In one or two short sentences, give me an encouraging, specific insight about my day " +
+          "so far based on my data above (calories/protein remaining, how I'm tracking). Don't ask " +
+          "me questions.",
+      },
+    ];
+
+    let insight = await this.ai.chat(accountId, messages);
+    const unsafeMention = extractCalorieMentions(insight).find(
+      (kcal) => kcal > 0 && !isCalorieTargetSafe(kcal, floor),
+    );
+    if (unsafeMention !== undefined) {
+      insight = describeCalorieFloorRefusal(floor);
+    }
+
+    await this.db.query(
+      `INSERT INTO app.coach_daily_insight (account_id, insight_date, content) VALUES ($1, $2, $3)
+       ON CONFLICT (account_id, insight_date) DO NOTHING`,
+      [accountId, today, insight],
+    );
+    return { insight };
+  }
+
   async getHistory(accountId: string): Promise<ChatMessageRow[]> {
     const result = await this.db.query<ChatMessageRow>(
       `SELECT * FROM app.chat_message WHERE account_id = $1 ORDER BY created_at DESC LIMIT $2`,

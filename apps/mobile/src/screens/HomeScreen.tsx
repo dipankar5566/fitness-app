@@ -18,6 +18,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineSpark, MacroBar, ProgressRing } from "../components/Charts";
 import { AppText, Button, Card, EmptyState, IconButton, SectionHeader, TextField } from "../components/ui";
 import {
+  getCoachDailyInsight,
   getProfile,
   getSuggestions,
   isNetworkError,
@@ -103,6 +104,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [suggestions, setSuggestions] = useState<Partial<Record<MealDisplayType, FoodSearchResult[]>>>({});
+  const [coachInsight, setCoachInsight] = useState<string | null>(null);
 
   const loadEntries = useCallback(async (db: SqlDb) => {
     setEntries(await listByLocalDay(db, accountId, todayDate()));
@@ -179,6 +181,14 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
       }
       const cached = await getKv(db, CACHED_GOAL_KEY);
       setGoal(cached ? (JSON.parse(cached) as Goal) : null);
+    }
+
+    // Coach daily insight - best-effort, cached server-side (one AI call/day), skipped offline or
+    // before onboarding.
+    try {
+      setCoachInsight(await getCoachDailyInsight(API_URL, session.accessToken));
+    } catch {
+      setCoachInsight(null);
     }
 
     // Meal suggestions ("what to log next") from the open /food/suggestions endpoint - best-effort,
@@ -345,6 +355,17 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
                 <MacroBar label="Fat" grams={sumMacro(entries, "fatG")} targetGrams={Number(goal.target_fat_g)} color={colors.fat} />
               </View>
             </Card>
+          ) : null}
+
+          {coachInsight ? (
+            <Pressable onPress={() => navigation.navigate("CoachChat", { accountId })}>
+              <Card style={[styles.insightCard, { marginTop: space.lg }]}>
+                <MaterialCommunityIcons name="robot-happy-outline" size={20} color={colors.primary} />
+                <AppText variant="caption" style={{ flex: 1, marginLeft: space.sm }}>
+                  {coachInsight}
+                </AppText>
+              </Card>
+            </Pressable>
           ) : null}
 
           {hcSteps !== null || hcExercise !== null || hcSleepMin !== null ? (
@@ -572,6 +593,7 @@ const styles = StyleSheet.create({
   quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
   waterHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   waterControls: { flexDirection: "row", alignItems: "center" },
+  insightCard: { flexDirection: "row", alignItems: "center" },
   suggestionRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginTop: space.sm },
   suggestionChip: {
     flexDirection: "row",

@@ -5,6 +5,7 @@ import {
   createFoodLog,
   createGuestAccount,
   deleteFoodLog,
+  getCoachDailyInsight,
   getCoachHistory,
   getFoodDetail,
   getProfile,
@@ -670,6 +671,30 @@ describe("isNetworkError", () => {
 
   it("is false for an ApiError (server responded, just not with 2xx)", () => {
     expect(isNetworkError(new ApiError("get profile failed with status 401"))).toBe(false);
+  });
+});
+
+describe("getCoachDailyInsight", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns the insight string on success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ insight: "On track - nice." }), { status: 200 })),
+    );
+    expect(await getCoachDailyInsight("http://localhost:3001", "t")).toBe("On track - nice.");
+  });
+
+  it("returns null for an empty body (not onboarded)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 200 })));
+    expect(await getCoachDailyInsight("http://localhost:3001", "t")).toBeNull();
+  });
+
+  it("returns null on a 403 quota cap instead of throwing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 403 })));
+    expect(await getCoachDailyInsight("http://localhost:3001", "t")).toBeNull();
   });
 });
 

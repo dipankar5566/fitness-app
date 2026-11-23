@@ -27,4 +27,10 @@ export class CoachController {
   async getHistory(@Req() req: Request) {
     return this.coach.getHistory(req.accountId!);
   }
+
+  /** Cached once-a-day grounded insight for the Today screen; null before onboarding. */
+  @Get("daily-insight")
+  async dailyInsight(@Req() req: Request) {
+    return this.coach.dailyInsight(req.accountId!);
+  }
 }
