@@ -9,6 +9,7 @@ import {
   type CreateFoodLogRequest,
   type DietType,
   type FoodReportRequest,
+  type MealType,
   type OnboardingRequest,
   type SyncPullResponse,
   type SyncPushRequest,
@@ -156,6 +157,25 @@ const foodDetailSchema = z.object({
   jainOk: z.boolean().nullable(),
 });
 export type FoodDetail = z.infer<typeof foodDetailSchema>;
+
+/** "What to log next" for a meal - top meal-relevant foods (GET /food/suggestions, open like
+ * search). Same row shape as searchFoods. */
+export async function getSuggestions(
+  apiUrl: string,
+  mealType: MealType,
+  dietType?: DietType,
+  limit = 6,
+): Promise<FoodSearchResult[]> {
+  const params = new URLSearchParams({ mealType, limit: String(limit) });
+  if (dietType) {
+    params.set("dietType", dietType);
+  }
+  const response = await fetch(`${apiUrl}/food/suggestions?${params.toString()}`);
+  if (!response.ok) {
+    throw new ApiError(`food suggestions failed with status ${response.status}`);
+  }
+  return z.array(foodSearchResultSchema).parse(await response.json());
+}
 
 export async function getFoodDetail(apiUrl: string, code: string): Promise<FoodDetail> {
   const response = await fetch(`${apiUrl}/food/${encodeURIComponent(code)}`);

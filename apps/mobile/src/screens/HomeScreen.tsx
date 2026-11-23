@@ -5,6 +5,7 @@ import {
   kcalRemaining,
   splitMealBudgets,
   sumKcal,
+  type DietType,
   type MealDisplayType,
 } from "@fitness-app/shared";
 import { waterGoalMl } from "@fitness-app/shared";
@@ -16,7 +17,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineSpark, MacroBar, ProgressRing } from "../components/Charts";
 import { AppText, Button, Card, EmptyState, IconButton, SectionHeader, TextField } from "../components/ui";
-import { getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
+import {
+  getProfile,
+  getSuggestions,
+  isNetworkError,
+  type FoodSearchResult,
+  type GetProfileResponse,
+} from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
 import {
   getLatest as getLatestBodyMetric,
@@ -42,7 +49,7 @@ import {
   WEIGHT_IMPORT_LOOKBACK_DAYS,
   type HcExerciseSessionSummary,
 } from "../lib/health-connect";
-import { CACHED_GOAL_KEY, getKv, setKv } from "../lib/kv-store";
+import { CACHED_GOAL_KEY, CACHED_PROFILE_KEY, getKv, setKv } from "../lib/kv-store";
 import type { SqlDb } from "../lib/sql-db";
 import { syncNow } from "../lib/sync-engine";
 import { getActiveSession, listSetsForSession } from "../lib/workout-repo";
@@ -95,6 +102,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
   const [weightReadings, setWeightReadings] = useState<LocalBodyMetric[]>([]);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [weightInput, setWeightInput] = useState("");
+  const [suggestions, setSuggestions] = useState<Partial<Record<MealDisplayType, FoodSearchResult[]>>>({});
 
   const loadEntries = useCallback(async (db: SqlDb) => {
     setEntries(await listByLocalDay(db, accountId, todayDate()));
@@ -171,6 +179,26 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
       }
       const cached = await getKv(db, CACHED_GOAL_KEY);
       setGoal(cached ? (JSON.parse(cached) as Goal) : null);
+    }
+
+    // Meal suggestions ("what to log next") from the open /food/suggestions endpoint - best-effort,
+    // diet-filtered via the cached profile, and silently skipped offline (chips are a nice-to-have).
+    try {
+      const cachedProfile = await getKv(db, CACHED_PROFILE_KEY);
+      const dietType = cachedProfile
+        ? (JSON.parse(cachedProfile) as { diet_type?: DietType }).diet_type
+        : undefined;
+      const meals = Object.keys(MEAL_LABELS) as MealDisplayType[];
+      const lists = await Promise.all(
+        meals.map((meal) => getSuggestions(API_URL, meal, dietType ?? undefined, 6).catch(() => [])),
+      );
+      const next: Partial<Record<MealDisplayType, FoodSearchResult[]>> = {};
+      meals.forEach((meal, i) => {
+        next[meal] = lists[i];
+      });
+      setSuggestions(next);
+    } catch {
+      // chips are optional - ignore any failure
     }
 
     setIsLoading(false);
@@ -471,6 +499,28 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
               </Pressable>
             ))
           )}
+          {(suggestions[group.mealType]?.length ?? 0) > 0 ? (
+            <View style={styles.suggestionRow}>
+              {suggestions[group.mealType]!.slice(0, 3).map((item) => (
+                <Pressable
+                  key={item.code}
+                  onPress={() =>
+                    navigation.navigate("LogFood", {
+                      accountId,
+                      foodCode: item.code,
+                      presetMealType: group.mealType,
+                    })
+                  }
+                  style={({ pressed }) => [styles.suggestionChip, pressed && styles.suggestionChipPressed]}
+                >
+                  <MaterialCommunityIcons name="plus" size={13} color={colors.primary} />
+                  <AppText variant="micro" color={colors.primary} numberOfLines={1} style={{ marginLeft: 2 }}>
+                    {item.name}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
       )}
       ListFooterComponent={
@@ -522,6 +572,17 @@ const styles = StyleSheet.create({
   quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.lg },
   waterHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   waterControls: { flexDirection: "row", alignItems: "center" },
+  suggestionRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginTop: space.sm },
+  suggestionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    maxWidth: "100%",
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryTonal,
+  },
+  suggestionChipPressed: { opacity: 0.7 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",

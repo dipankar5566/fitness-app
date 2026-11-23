@@ -8,6 +8,7 @@ import {
   getCoachHistory,
   getFoodDetail,
   getProfile,
+  getSuggestions,
   isNetworkError,
   listFoodLog,
   listPrograms,
@@ -669,6 +670,41 @@ describe("isNetworkError", () => {
 
   it("is false for an ApiError (server responded, just not with 2xx)", () => {
     expect(isNetworkError(new ApiError("get profile failed with status 401"))).toBe(false);
+  });
+});
+
+describe("getSuggestions", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("requests the meal (and diet) and parses the rows", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify([
+            { food_id: 1, code: "ASC100", name: "Poha", food_type: "recipe", score: 0.6, dietClass: "veg" },
+          ]),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const results = await getSuggestions("http://localhost:3001", "breakfast", "veg");
+
+    expect(results[0].code).toBe("ASC100");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/food\/suggestions\?.*mealType=breakfast.*dietType=veg/),
+    );
+  });
+
+  it("throws ApiError on a non-2xx response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 400 })),
+    );
+
+    await expect(getSuggestions("http://localhost:3001", "lunch")).rejects.toBeInstanceOf(ApiError);
   });
 });
 
