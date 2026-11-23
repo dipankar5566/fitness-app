@@ -495,15 +495,30 @@ UI cards are typecheck/lint-clean with on-device verification still pending.
 
 Verified: lint/typecheck/tests green at every step; E1 curl push/pull/stale/soft-delete + psql CHECK
 rejection; E3 against the real API/`indb` DB for the 401/400/422-floor/cache paths, the `ai_plan` CHECK,
-and diet-filtered resolution of typical plan foods. **On a real emulator** (`fitness_app_avd`, native
-rebuild with the widget plugin): onboarding -> Today shows the Lv chip and fasting card; starting a 16:8
-fast ticks live and lands in `app.fasting_log` via sync; logging a food adds the streak chip and the
+and diet-filtered resolution of typical plan foods, **plus a real OpenAI call with a real
+`OPENAI_API_KEY`** once one was configured (see the E3 bullet's "Resolved bug" note above - that pass is
+what surfaced and fixed the paneer/null-nutrient resolver bug). **On a real emulator** (`fitness_app_avd`,
+native rebuild with the widget plugin): onboarding -> Today shows the Lv chip and fasting card; starting a
+16:8 fast ticks live and lands in `app.fasting_log` via sync; logging a food adds the streak chip and the
 Achievements screen shows the right points/progress; the widget is placeable from the launcher, shows
 live kcal/water, "+ Glass" logs water headlessly (synced on next app open, psql-confirmed) and "Log food"
 deep-links into FoodSearch. That pass caught one real bug, fixed: the widget rounded "eaten" before
-subtracting, so it could show 1 kcal off the Today ring. **Not yet verified:** a real OpenAI meal-plan
-generation (no `OPENAI_API_KEY` on this machine). Emulator networking note: `adb reverse` didn't work on
-this AVD - the host is reachable as `10.0.2.2`, so start Metro with `EXPO_PUBLIC_API_URL=http://10.0.2.2:<api port>`.
+subtracting, so it could show 1 kcal off the Today ring.
+
+Emulator networking note: `adb reverse` didn't work on this AVD - the host is reachable as `10.0.2.2`, so
+start Metro with `EXPO_PUBLIC_API_URL=http://10.0.2.2:<api port>`.
+
+**Known trap, hit in this same pass: a guest session's JWT silently breaks if `apps/api`'s
+`JWT_SECRET` changes under it.** The guest login stored on-device (`expo-secure-store`) is a JWT signed
+with whatever `JWT_SECRET` the API had *at the time of login*; every authenticated call after a
+`JWT_SECRET` change (e.g. switching from a throwaway dev value to the real one in a new `.env`) fails
+verification. `GuestLoadingScreen`'s session-resume path catches this the same blanket way it catches a
+genuine network failure, so the UI shows "Could not reach the server" either way - there's no way from the
+screen alone to tell a dead network apart from a dead token. Fix for a dev device: `adb shell pm clear
+com.anonymous.fitnessapp` (wipes the local SQLite mirror and the stored session, so the app creates a
+fresh guest account against the current secret - any already-synced server-side rows for the old account
+are untouched, just orphaned under an id the device no longer has). Keep `JWT_SECRET` stable across
+restarts during a test session to avoid this entirely.
 
 **Known issue, resolved**: Vitest's default esbuild transform doesn't emit TypeScript's
 `emitDecoratorMetadata`, which NestJS constructor injection needs - `apps/api/vitest.config.ts`
