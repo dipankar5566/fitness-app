@@ -29,6 +29,9 @@ const goalRow = {
 
 // Per-100g nutrients chosen so the scaled plan lands on target: 400 g "paneer" (265 kcal, 18 g P)
 // + 400 g "rice" (130 kcal, 2.7 g P) + 400 g "dal" (105 kcal, 7 g P) = 2000 kcal, ~111 g protein.
+// P00 has no nutrient row at all (NUTRIENTS has no entry for it) - mirrors a real gap found against
+// the real indb database (L003 "Paneer" itself has null nutrients there) - so resolve() must fall
+// through to P01, the next diet-matching candidate, rather than silently dropping "paneer".
 const NUTRIENTS = new Map([
   ["P01", { name: "Paneer", kcalPer100g: 265, proteinGPer100g: 18, fatGPer100g: 20, carbGPer100g: 1.2, servingGramsByName: {} }],
   ["R01", { name: "Boiled rice", kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
@@ -50,7 +53,7 @@ describe("MealPlanService", () => {
     ai = { generateMealPlan: vi.fn() };
     food = {
       search: vi.fn(async (name: string) => {
-        if (name === "paneer") return [searchHit("P01", "veg")];
+        if (name === "paneer") return [searchHit("P00", "veg"), searchHit("P01", "veg")];
         if (name === "rice") return [searchHit("R01", "veg")];
         if (name === "dal") return [searchHit("D01", "veg")];
         if (name === "mystery curry") return [searchHit("X01", null)]; // unverified diet class
@@ -104,6 +107,18 @@ describe("MealPlanService", () => {
       expect.arrayContaining(["account-1"]),
     );
     expect(ai.generateMealPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls through to the next diet-matching candidate when the top match has no nutrient data", async () => {
+    // Enough paneer on its own to land near the 2000 kcal target without relying on any other
+    // item - isolates the fallback itself from the scale/validate machinery the other tests cover.
+    ai.generateMealPlan.mockResolvedValue([{ mealType: "lunch", name: "paneer", grams: 750 }]);
+
+    const plan = await service.generate("account-1");
+
+    // P00 (search's top hit) has no row in NUTRIENTS - must not be silently dropped in favour of
+    // nothing; P01, the next diet-matching candidate, should be used instead.
+    expect(plan.items.map((i) => i.foodRef)).toEqual(["P01"]);
   });
 
   it("skips diet-unverified foods for a veg account instead of recommending them", async () => {

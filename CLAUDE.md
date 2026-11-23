@@ -476,6 +476,15 @@ UI cards are typecheck/lint-clean with on-device verification still pending.
   logs a meal via the normal outbox and swaps a food (FoodSearch `swapPlanItem` mode) at the same kcal.
   Known limitation: inherits `search_foods()`'s top-1 fuzzy matching ("Curd" -> "Curd dip", "Moong dal"
   -> raw dal) - totals stay valid because everything is re-costed, but Swap exists for odd picks.
+  **Resolved bug, found verifying against a real OpenAI key**: `resolve()` originally took only the
+  first diet-matching search candidate per suggestion and dropped the item entirely if *that* candidate
+  had null nutrient data (a real gap on this database - `L003` "Paneer" itself has no nutrient row) -
+  silently removing paneer, a veg plan's main protein source, from every plan with nothing replacing it,
+  so real generations landed on-kcal but consistently ~70% of the protein target and got rejected by
+  validation. Fixed to walk each item's diet-matching candidates in order until one has usable nutrients
+  (one batched `getNutrientSummaries` call across all candidates, not just the first pick per item) -
+  verified with a real OpenAI call producing an 11-item, on-target plan (2662/2654 kcal, 127/120 g
+  protein), a real `ai_usage` row, and a same-day repeat call served from cache with no new AI call.
 - **E4 Android home-screen widget.** `react-native-android-widget` 0.26 (config plugin in `app.json`,
   `scheme: "fitness"`). `src/widget/`: `TodayWidget` (kcal left + water, "Log food" `OPEN_URI` deep link,
   one-tap "+ Glass" custom action), a headless `widget-task-handler` registered in `index.ts` that reads

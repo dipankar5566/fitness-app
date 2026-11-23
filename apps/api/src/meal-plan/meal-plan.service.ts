@@ -130,33 +130,44 @@ export class MealPlanService {
    * what's left still makes a plan.
    */
   private async resolve(raw: RawPlanItem[], dietType: DietType): Promise<MealPlanItem[]> {
-    const matches = await Promise.all(
+    const withCandidates = await Promise.all(
       raw
         .filter((item) => item.grams > 0)
         .map(async (item) => {
           const candidates = await this.food.search(item.name, SEARCH_CANDIDATES, dietType);
-          const match = candidates.find((c) => dietType === "non_veg" || c.dietClass !== null);
-          return match ? { item, match } : null;
+          const dietMatches = candidates.filter((c) => dietType === "non_veg" || c.dietClass !== null);
+          return { item, dietMatches };
         }),
     );
-    const found = matches.filter((m): m is NonNullable<typeof m> => m !== null);
-    const summaries = await this.food.getNutrientSummaries([...new Set(found.map((m) => m.match.code))]);
+
+    // One batched nutrient lookup across every diet-matching candidate for every item (not just
+    // the first pick) - a real indb row can have a diet class but null nutrient data (e.g. L003
+    // "Paneer" on this database), so picking only the first candidate silently drops a food's best
+    // match, taking its macros (protein, for a veg plan's paneer) out of the plan with nothing
+    // replacing it. Walking each item's own candidates in order until one has usable nutrients
+    // keeps the model's intent (paneer, not some unrelated fallback) while never recommending a
+    // food we can't actually cost.
+    const allCodes = withCandidates.flatMap((w) => w.dietMatches.map((c) => c.code));
+    const summaries = await this.food.getNutrientSummaries([...new Set(allCodes)]);
 
     const items: MealPlanItem[] = [];
-    for (const { item, match } of found) {
-      const summary = summaries.get(match.code);
-      if (!summary || summary.kcalPer100g === null) continue;
-      items.push({
-        mealType: item.mealType,
-        foodSource: "indb",
-        foodRef: match.code,
-        foodName: summary.name,
-        grams: Math.round(item.grams),
-        kcalPer100g: summary.kcalPer100g,
-        proteinGPer100g: summary.proteinGPer100g ?? 0,
-        carbGPer100g: summary.carbGPer100g ?? 0,
-        fatGPer100g: summary.fatGPer100g ?? 0,
-      });
+    for (const { item, dietMatches } of withCandidates) {
+      for (const candidate of dietMatches) {
+        const summary = summaries.get(candidate.code);
+        if (!summary || summary.kcalPer100g === null) continue;
+        items.push({
+          mealType: item.mealType,
+          foodSource: "indb",
+          foodRef: candidate.code,
+          foodName: summary.name,
+          grams: Math.round(item.grams),
+          kcalPer100g: summary.kcalPer100g,
+          proteinGPer100g: summary.proteinGPer100g ?? 0,
+          carbGPer100g: summary.carbGPer100g ?? 0,
+          fatGPer100g: summary.fatGPer100g ?? 0,
+        });
+        break;
+      }
     }
     return items;
   }
