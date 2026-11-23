@@ -1,4 +1,6 @@
 import {
+  mealPlanSchema,
+  type MealPlan,
   coachMessageRequestSchema,
   createFoodLogRequestSchema,
   foodReportRequestSchema,
@@ -511,4 +513,44 @@ export async function getCoachDailyInsight(apiUrl: string, accessToken: string):
   }
   const parsed = z.object({ insight: z.string() }).nullable().parse(JSON.parse(text));
   return parsed?.insight ?? null;
+}
+
+const mealPlanResponseSchema = z.object({ plan: mealPlanSchema.nullable() });
+
+/** Today's cached AI meal plan (GET /meal-plan/today) - never triggers generation. */
+export async function getTodayMealPlan(apiUrl: string, accessToken: string): Promise<MealPlan | null> {
+  const response = await fetch(`${apiUrl}/meal-plan/today`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!response.ok) {
+    throw new ApiError(`get meal plan failed with status ${response.status}`);
+  }
+  return mealPlanResponseSchema.parse(await response.json()).plan;
+}
+
+/** Thrown when the server can't produce a plan that meets the account's targets (422), or refuses a
+ * target below the safe calorie floor - `message` is the server's own user-facing explanation. */
+export class MealPlanUnavailableError extends ApiError {}
+
+/** POST /meal-plan/generate - returns today's cached plan or generates one. 403 = daily AI quota. */
+export async function generateMealPlan(apiUrl: string, accessToken: string): Promise<MealPlan> {
+  const response = await fetch(`${apiUrl}/meal-plan/generate`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (response.status === 403) {
+    throw new AiQuotaExceededError("meal plan failed: daily AI quota exceeded");
+  }
+  if (response.status === 422 || response.status === 400) {
+    const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
+    throw new MealPlanUnavailableError(
+      typeof body?.message === "string" ? body.message : "Couldn't build a meal plan right now.",
+    );
+  }
+  if (!response.ok) {
+    throw new ApiError(`generate meal plan failed with status ${response.status}`);
+  }
+  const plan = mealPlanResponseSchema.parse(await response.json()).plan;
+  if (!plan) {
+    throw new ApiError("generate meal plan returned no plan");
+  }
+  return plan;
 }

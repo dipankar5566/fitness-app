@@ -5,6 +5,7 @@ import type { Exercise } from "../lib/api";
 import { MainTabs } from "./MainTabs";
 import { BarcodeScanScreen } from "../screens/BarcodeScanScreen";
 import { AchievementsScreen } from "../screens/AchievementsScreen";
+import { MealPlanScreen } from "../screens/MealPlanScreen";
 import { CoachChatScreen } from "../screens/CoachChatScreen";
 import { CreateCustomFoodScreen } from "../screens/CreateCustomFoodScreen";
 import { ExerciseDetailScreen } from "../screens/ExerciseDetailScreen";
@@ -35,7 +36,7 @@ export type RootStackParamList = {
   Home: { accountId: string };
   FoodSearch: {
     accountId: string;
-    mode?: "pickIngredient" | "pickMealItem";
+    mode?: "pickIngredient" | "pickMealItem" | "swapPlanItem";
     mealItemIndex?: number;
     presetMealType?: MealType;
   };
@@ -57,6 +58,7 @@ export type RootStackParamList = {
   Reminders: { accountId: string };
   HealthConnect: { accountId: string };
   Achievements: { accountId: string };
+  MealPlan: { accountId: string; swappedPlanItem?: { index: number; code: string; name: string } };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -137,6 +139,7 @@ export function RootNavigator() {
         <Stack.Screen name="Reminders" component={RemindersScreen} options={{ title: "Reminders" }} />
         <Stack.Screen name="HealthConnect" component={HealthConnectScreen} options={{ title: "Health Connect" }} />
         <Stack.Screen name="Achievements" component={AchievementsScreen} options={{ title: "Achievements" }} />
+        <Stack.Screen name="MealPlan" component={MealPlanScreen} options={{ title: "Meal plan" }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

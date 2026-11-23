@@ -47,6 +47,13 @@ export function LogTabScreen({ navigation, route }: MainTabScreenProps<"Log">) {
           subtitle="Packaged food lookup"
           onPress={() => navigation.navigate("BarcodeScan", { accountId })}
         />
+        <Divider />
+        <ListRow
+          icon="silverware-fork-knife"
+          title="Today's meal plan"
+          subtitle="An AI sample day built around your targets"
+          onPress={() => navigation.navigate("MealPlan", { accountId })}
+        />
       </Card>
 
       <SectionHeader title="Your foods" style={{ marginTop: space.xxl }} />

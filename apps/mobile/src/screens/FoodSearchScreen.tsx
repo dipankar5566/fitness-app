@@ -157,6 +157,11 @@ export function FoodSearchScreen({ navigation, route }: Props) {
                   accountId: route.params.accountId,
                   foodCode: item.code,
                 });
+              } else if (route.params.mode === "swapPlanItem") {
+                navigation.navigate("MealPlan", {
+                  accountId: route.params.accountId,
+                  swappedPlanItem: { index: route.params.mealItemIndex!, code: item.code, name: item.name },
+                });
               } else if (route.params.mode === "pickMealItem") {
                 navigation.navigate("LogMealFromText", {
                   accountId: route.params.accountId,

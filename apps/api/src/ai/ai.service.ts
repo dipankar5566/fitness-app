@@ -1,5 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { AI_PROVIDER, type AiProvider, type ChatMessage, type RawMealItem } from "./ai-provider.interface.js";
+import {
+  AI_PROVIDER,
+  type AiProvider,
+  type ChatMessage,
+  type MealPlanRequest,
+  type RawMealItem,
+  type RawPlanItem,
+} from "./ai-provider.interface.js";
 import { AiUsageService } from "./ai-usage.service.js";
 
 @Injectable()
@@ -27,5 +34,10 @@ export class AiService {
   async chat(accountId: string, messages: ChatMessage[]): Promise<string> {
     await this.usage.checkQuota(accountId);
     return this.provider.chat(accountId, messages);
+  }
+
+  async generateMealPlan(accountId: string, request: MealPlanRequest): Promise<RawPlanItem[]> {
+    await this.usage.checkQuota(accountId);
+    return this.provider.generateMealPlan(accountId, request);
   }
 }

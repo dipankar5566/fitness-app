@@ -492,6 +492,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
             <QuickAction icon="magnify" label="Search" onPress={() => navigation.navigate("FoodSearch", { accountId })} />
             <QuickAction icon="chat-processing-outline" label="AI / Photo" onPress={() => navigation.navigate("LogMealFromText", { accountId })} />
             <QuickAction icon="barcode-scan" label="Scan" onPress={() => navigation.navigate("BarcodeScan", { accountId })} />
+            <QuickAction icon="silverware-fork-knife" label="Plan" onPress={() => navigation.navigate("MealPlan", { accountId })} />
             <QuickAction icon="robot-happy-outline" label="Coach" onPress={() => navigation.navigate("CoachChat", { accountId })} />
           </View>
 

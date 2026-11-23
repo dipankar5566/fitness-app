@@ -15,7 +15,7 @@ export const syncableBaseSchema = z.object({
 export const foodSourceSchema = z.enum(["indb", "packaged", "custom"]);
 export const mealTypeSchema = z.enum(["breakfast", "lunch", "dinner", "snack"]);
 export type MealType = z.infer<typeof mealTypeSchema>;
-export const logSourceSchema = z.enum(["manual", "ai_text", "ai_photo", "barcode"]);
+export const logSourceSchema = z.enum(["manual", "ai_text", "ai_photo", "barcode", "ai_plan"]);
 export type LogSource = z.infer<typeof logSourceSchema>;
 
 export const foodLogEntrySchema = syncableBaseSchema.extend({

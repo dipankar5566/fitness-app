@@ -9,12 +9,13 @@ describe("AiService", () => {
     parseMealText: ReturnType<typeof vi.fn>;
     parseMealImage: ReturnType<typeof vi.fn>;
     chat: ReturnType<typeof vi.fn>;
+    generateMealPlan: ReturnType<typeof vi.fn>;
   };
   let usage: { checkQuota: ReturnType<typeof vi.fn> };
   let service: AiService;
 
   beforeEach(async () => {
-    provider = { parseMealText: vi.fn(), parseMealImage: vi.fn(), chat: vi.fn() };
+    provider = { parseMealText: vi.fn(), parseMealImage: vi.fn(), chat: vi.fn(), generateMealPlan: vi.fn() };
     usage = { checkQuota: vi.fn().mockResolvedValue(undefined) };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -69,5 +70,25 @@ describe("AiService", () => {
     expect(usage.checkQuota).toHaveBeenCalledWith("account-1");
     expect(provider.chat).toHaveBeenCalledWith("account-1", messages);
     expect(result).toBe("You're doing great, keep it up!");
+  });
+
+  it("checks the quota before generating a meal plan, and skips the provider when it rejects", async () => {
+    const request = {
+      targetKcal: 2000,
+      targetProteinG: 120,
+      targetCarbG: 220,
+      targetFatG: 60,
+      dietType: "veg",
+      mealBudgets: { breakfast: 500, lunch: 700, snack: 200, dinner: 600 },
+    };
+    provider.generateMealPlan.mockResolvedValue([{ mealType: "lunch", name: "Chapati", grams: 80 }]);
+
+    await expect(service.generateMealPlan("account-1", request)).resolves.toHaveLength(1);
+    expect(usage.checkQuota).toHaveBeenCalledWith("account-1");
+
+    provider.generateMealPlan.mockClear();
+    usage.checkQuota.mockRejectedValue(new Error("Daily AI usage limit reached. Try again tomorrow."));
+    await expect(service.generateMealPlan("account-1", request)).rejects.toThrow(/limit reached/);
+    expect(provider.generateMealPlan).not.toHaveBeenCalled();
   });
 });

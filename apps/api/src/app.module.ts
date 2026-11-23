@@ -8,6 +8,7 @@ import { ExerciseModule } from "./exercise/exercise.module.js";
 import { FoodLogModule } from "./food-log/food-log.module.js";
 import { FoodModule } from "./food/food.module.js";
 import { HealthController } from "./health/health.controller.js";
+import { MealPlanModule } from "./meal-plan/meal-plan.module.js";
 import { PackagedFoodModule } from "./packaged-food/packaged-food.module.js";
 import { ProfileModule } from "./profile/profile.module.js";
 import { ProgramModule } from "./program/program.module.js";
@@ -22,6 +23,7 @@ import { SyncModule } from "./sync/sync.module.js";
     CoachModule,
     ExerciseModule,
     FoodModule,
+    MealPlanModule,
     PackagedFoodModule,
     ProfileModule,
     ProgramModule,

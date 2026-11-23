@@ -4,8 +4,8 @@
  * feature calls an AI SDK directly (CLAUDE.md "Architecture rules").
  *
  * Grown one method at a time as each roadmap item is actually built (parseMealText/parseMealImage
- * for M4; chat for M5's coach) rather than stubbing ARCHITECTURE.md's full sketch (which also has
- * generatePlan) up front - adding stub methods ahead of the features that need them would be
+ * for M4; chat for M5's coach; generateMealPlan - the meal half of ARCHITECTURE.md's generatePlan
+ * sketch - for Phase E's sample-day plan) rather than stubbing the full sketch up front - adding stub methods ahead of the features that need them would be
  * exactly the kind of half-finished implementation CLAUDE.md asks not to write.
  *
  * All methods take `accountId` (ARCHITECTURE.md's original sketch had a `ctx: UserContext` here;
@@ -31,6 +31,29 @@ export interface RawMealItem {
   unit: string;
 }
 
+/** What the meal-plan generator is asked to hit. Every number comes from the account's own targets
+ * (ProfileService) - the model is never trusted to pick them. */
+export interface MealPlanRequest {
+  targetKcal: number;
+  targetProteinG: number;
+  targetCarbG: number;
+  targetFatG: number;
+  /** veg | eggetarian | non_veg | vegan | jain - the caller still filters the result itself. */
+  dietType: string;
+  /** Per-meal kcal budget (splitMealBudgets), so the day is spread sensibly. */
+  mealBudgets: Record<"breakfast" | "lunch" | "snack" | "dinner", number>;
+  /** Problems with a previous attempt (validatePlanAgainstTargets), for one corrective retry. */
+  feedback?: string[];
+}
+
+/** One suggested food, by name and an approximate gram weight - resolved to a real indb food and
+ * re-costed from our own nutrient data by the caller (MealPlanService), never used as-is. */
+export interface RawPlanItem {
+  mealType: "breakfast" | "lunch" | "snack" | "dinner";
+  name: string;
+  grams: number;
+}
+
 export const AI_PROVIDER = Symbol("AiProvider");
 
 export interface AiProvider {
@@ -47,4 +70,8 @@ export interface AiProvider {
    * the new user message) - the caller (CoachService) owns grounding/safety and builds this list;
    * the provider's only job is to call the model and return its reply text. */
   chat(accountId: string, messages: ChatMessage[]): Promise<string>;
+
+  /** Suggests a one-day Indian meal plan aimed at the request's targets. Names + grams only; the
+   * caller resolves, filters by diet, re-costs and validates (MealPlanService). */
+  generateMealPlan(accountId: string, request: MealPlanRequest): Promise<RawPlanItem[]>;
 }

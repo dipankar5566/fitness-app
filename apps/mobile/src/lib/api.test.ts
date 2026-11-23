@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AiQuotaExceededError,
   ApiError,
+  generateMealPlan,
+  getTodayMealPlan,
+  MealPlanUnavailableError,
   createFoodLog,
   createGuestAccount,
   deleteFoodLog,
@@ -768,5 +771,58 @@ describe("reportFood", () => {
     await expect(
       reportFood("http://localhost:3001", "token-1", { kind: "missing", query: "x" }),
     ).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("meal plan", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const plan = {
+    planDate: "2026-11-23",
+    items: [
+      {
+        mealType: "lunch",
+        foodSource: "indb",
+        foodRef: "A001",
+        foodName: "Chapati",
+        grams: 80,
+        kcalPer100g: 300,
+        proteinGPer100g: 9,
+        carbGPer100g: 50,
+        fatGPer100g: 7,
+      },
+    ],
+    totals: { kcal: 240, proteinG: 7.2, carbG: 40, fatG: 5.6 },
+    targets: { kcal: 2000, proteinG: 120, carbG: 220, fatG: 60 },
+  };
+
+  it("getTodayMealPlan returns null when no plan exists yet", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ plan: null }), { status: 200 })));
+    await expect(getTodayMealPlan("http://localhost:3001", "token-1")).resolves.toBeNull();
+  });
+
+  it("generateMealPlan POSTs with the bearer token and parses the plan", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ plan }), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(generateMealPlan("http://localhost:3001", "token-1")).resolves.toMatchObject({ planDate: "2026-11-23" });
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3001/meal-plan/generate", {
+      method: "POST",
+      headers: { Authorization: "Bearer token-1" },
+    });
+  });
+
+  it("maps 403 to AiQuotaExceededError and 422 to MealPlanUnavailableError carrying the server's message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 403 })));
+    await expect(generateMealPlan("http://localhost:3001", "token-1")).rejects.toBeInstanceOf(AiQuotaExceededError);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ message: "Below your safe minimum." }), { status: 422 })),
+    );
+    await expect(generateMealPlan("http://localhost:3001", "token-1")).rejects.toThrow(MealPlanUnavailableError);
+    await expect(generateMealPlan("http://localhost:3001", "token-1")).rejects.toThrow("Below your safe minimum.");
   });
 });

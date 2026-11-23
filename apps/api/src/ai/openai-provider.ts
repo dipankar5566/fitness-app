@@ -4,7 +4,7 @@ import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { AiUsageService, type AiFeature } from "./ai-usage.service.js";
-import type { AiProvider, ChatMessage, RawMealItem } from "./ai-provider.interface.js";
+import type { AiProvider, ChatMessage, MealPlanRequest, RawMealItem, RawPlanItem } from "./ai-provider.interface.js";
 
 const MEAL_PARSE_MODEL = "gpt-4o-mini"; // cheap model for parsing
 const COACH_CHAT_MODEL = "gpt-4o"; // PRD §9: gpt-4o reserved for the M5 coach
@@ -52,6 +52,34 @@ countable, otherwise estimate a sensible number of servings).
 - unit: a sensible unit for that estimate (e.g. piece, bowl, plate, cup, katori, g, ml).
 These are visual estimates, not exact counts - give your best reasonable guess rather than \
 refusing to answer. Do not list items that aren't actually visible in the photo.`;
+
+const mealPlanSchema = z.object({
+  items: z.array(
+    z.object({
+      mealType: z.enum(["breakfast", "lunch", "snack", "dinner"]),
+      name: z.string(),
+      grams: z.number(),
+    }),
+  ),
+});
+
+const DIET_RULES: Record<string, string> = {
+  veg: "Vegetarian: no meat, fish or egg. Dairy is fine.",
+  eggetarian: "Vegetarian plus eggs: no meat or fish.",
+  non_veg: "No restriction - meat, fish, egg and dairy are all fine.",
+  vegan: "Vegan: no meat, fish, egg, dairy, ghee, paneer, curd or honey.",
+  jain: "Jain: vegetarian with no onion, garlic, potato or other root vegetables; no egg.",
+};
+
+const MEAL_PLAN_SYSTEM_PROMPT = `You plan one day of everyday Indian home-style meals for a \
+gym-goer. Use common, simple foods and dishes (e.g. roti, rice, dal, sabzi, idli, poha, paneer, \
+curd, eggs, chicken curry, fruit). For every item give:
+- mealType: breakfast, lunch, snack or dinner
+- name: a short plain English name of a single food or dish, as it would appear in an Indian food \
+database (e.g. "Chapati", "Moong dal", "Paneer bhurji") - one food per item, no combinations
+- grams: a realistic cooked/served weight in grams
+Aim the day's total close to the targets given, with protein at or above its target. Strictly \
+follow the diet rule. Return 2-4 items per meal.`;
 
 @Injectable()
 export class OpenAiProvider implements AiProvider {
@@ -118,6 +146,33 @@ export class OpenAiProvider implements AiProvider {
     }
     await this.recordUsage(accountId, "coach_chat", COACH_CHAT_MODEL, completion.usage);
     return reply;
+  }
+
+  async generateMealPlan(accountId: string, request: MealPlanRequest): Promise<RawPlanItem[]> {
+    const budgets = request.mealBudgets;
+    const userPrompt = [
+      `Daily targets: ${request.targetKcal} kcal, ${request.targetProteinG} g protein, ` +
+        `${request.targetCarbG} g carbs, ${request.targetFatG} g fat.`,
+      `Meal kcal budgets: breakfast ${budgets.breakfast}, lunch ${budgets.lunch}, snack ${budgets.snack}, dinner ${budgets.dinner}.`,
+      `Diet rule: ${DIET_RULES[request.dietType] ?? DIET_RULES.non_veg}`,
+      ...(request.feedback?.length ? [`Your previous plan had problems - fix them: ${request.feedback.join(" ")}`] : []),
+    ].join("\n");
+
+    const completion = await this.client.chat.completions.parse({
+      model: MEAL_PARSE_MODEL,
+      messages: [
+        { role: "system", content: MEAL_PLAN_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: zodResponseFormat(mealPlanSchema, "meal_plan"),
+    });
+
+    const parsed = completion.choices[0]?.message.parsed;
+    if (!parsed) {
+      throw new Error("OpenAI returned no parsed meal plan");
+    }
+    await this.recordUsage(accountId, "plan_generate", MEAL_PARSE_MODEL, completion.usage);
+    return parsed.items;
   }
 
   private async recordUsage(
