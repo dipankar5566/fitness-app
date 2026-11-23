@@ -8,9 +8,19 @@ import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { FOLLOWED_PROGRAM_ID_KEY, FOLLOWED_PROGRAM_KEY, getKv, setKv } from "../lib/kv-store";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Programs">;
+
+const useStyles = makeStyles((colors) => ({
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: space.lg, paddingBottom: space.xxxl },
+  // Previously a tight caption (12px/16 lineHeight) directly under the next day's block with only
+  // 8px of margin - on a long exercise list that wraps to 2 lines, this read as visually
+  // overlapping the line below it (docs/UI_UX_AUDIT.md M8). More line-height and a bit more
+  // vertical gap fixes it without touching the shared `caption` variant other screens rely on.
+  dayLine: { marginTop: space.md, lineHeight: 20 },
+}));
 
 /**
  * Built-in program picker - PRD section 5.4 ("programs selectable in onboarding", "follow a
@@ -20,6 +30,8 @@ type Props = NativeStackScreenProps<RootStackParamList, "Programs">;
  * offline, the same way cached_profile/cached_goal already let Home work offline.
  */
 export function ProgramsScreen({ navigation, route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { accountId } = route.params;
   const [programs, setPrograms] = useState<Program[]>([]);
   const [followedId, setFollowedId] = useState<string | null>(null);
@@ -55,8 +67,8 @@ export function ProgramsScreen({ navigation, route }: Props) {
 
   return (
     <FlatList
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxxl }}
+      style={styles.container}
+      contentContainerStyle={styles.content}
       data={programs}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
@@ -76,7 +88,7 @@ export function ProgramsScreen({ navigation, route }: Props) {
               <AppText color={colors.textSecondary} style={{ marginTop: space.xxs }}>{item.description}</AppText>
             ) : null}
             {item.days.map((day) => (
-              <AppText key={day.id} variant="caption" color={colors.textSecondary} style={{ marginTop: space.sm }}>
+              <AppText key={day.id} variant="caption" color={colors.textSecondary} style={styles.dayLine}>
                 {day.name}: {day.exercises.map((e) => e.exerciseName).join(", ")}
               </AppText>
             ))}

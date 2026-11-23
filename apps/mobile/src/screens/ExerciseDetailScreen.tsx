@@ -2,11 +2,18 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Image, View } from "react-native";
 import { AppText, Badge, Screen } from "../components/ui";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, radius, space } from "../theme";
+import { makeStyles, radius, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ExerciseDetail">;
 
+const useStyles = makeStyles((colors) => ({
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginTop: space.xs },
+  image: { width: "100%", height: 220, marginTop: space.lg, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+}));
+
 export function ExerciseDetailScreen({ route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { exercise } = route.params;
 
   return (
@@ -26,11 +33,7 @@ export function ExerciseDetailScreen({ route }: Props) {
       ) : null}
 
       {exercise.imageUrls[0] ? (
-        <Image
-          source={{ uri: exercise.imageUrls[0] }}
-          style={{ width: "100%", height: 220, marginTop: space.lg, borderRadius: radius.md, backgroundColor: colors.surfaceAlt }}
-          resizeMode="contain"
-        />
+        <Image source={{ uri: exercise.imageUrls[0] }} style={styles.image} resizeMode="contain" />
       ) : null}
 
       <AppText variant="h2" style={{ marginTop: space.xl, marginBottom: space.sm }}>Instructions</AppText>
@@ -44,11 +47,13 @@ export function ExerciseDetailScreen({ route }: Props) {
 }
 
 function Chips({ values }: { values: string[] }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   if (values.length === 0) {
     return <AppText color={colors.textTertiary}>—</AppText>;
   }
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.xs, marginTop: space.xs }}>
+    <View style={styles.chipsRow}>
       {values.map((value) => (
         <Badge key={value} label={value} />
       ))}

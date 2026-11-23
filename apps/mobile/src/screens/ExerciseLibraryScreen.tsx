@@ -1,13 +1,13 @@
 import { exerciseEquipmentSchema, exerciseMuscleSchema } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, View } from "react-native";
 import { ChipSelect } from "../components/ChipSelect";
-import { AppText, EmptyState, ListRow, Screen } from "../components/ui";
+import { AppText, EmptyState, ListRow, Screen, TextField } from "../components/ui";
 import { type Exercise, searchExercises } from "../lib/api";
 import { API_URL } from "../lib/env";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { makeStyles, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ExerciseLibrary">;
 
@@ -18,7 +18,16 @@ function formatLabel(value: string): string {
   return value.replace(/^./, (c) => c.toUpperCase());
 }
 
+const useStyles = makeStyles((colors) => ({
+  filters: { paddingHorizontal: space.lg, paddingTop: space.lg },
+  separator: { height: 1, backgroundColor: colors.separator },
+  listContent: { paddingHorizontal: space.lg, paddingBottom: space.xl },
+}));
+
 export function ExerciseLibraryScreen({ navigation, route }: Props) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const [query, setQuery] = useState("");
   const [muscle, setMuscle] = useState<(typeof MUSCLE_OPTIONS)[number]>("all");
   const [equipment, setEquipment] = useState<(typeof EQUIPMENT_OPTIONS)[number]>("all");
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -47,17 +56,28 @@ export function ExerciseLibraryScreen({ navigation, route }: Props) {
     };
   }, [muscle, equipment]);
 
+  // Name filter is applied client-side over the already-fetched (muscle/equipment-filtered) list -
+  // no new endpoint, and lets a user who knows the exercise name skip scrolling past 24 filter
+  // chips entirely (docs/UI_UX_AUDIT.md H4).
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return term ? exercises.filter((item) => item.name.toLowerCase().includes(term)) : exercises;
+  }, [exercises, query]);
+
   return (
     <Screen padded={false}>
-      <View style={{ paddingHorizontal: space.lg, paddingTop: space.lg }}>
-        <ChipSelect label="Muscle" options={MUSCLE_OPTIONS} value={muscle} onChange={setMuscle} formatOption={formatLabel} />
-        <ChipSelect
-          label="Equipment"
-          options={EQUIPMENT_OPTIONS}
-          value={equipment}
-          onChange={setEquipment}
-          formatOption={formatLabel}
-        />
+      <View style={styles.filters}>
+        <TextField label="Search by name" placeholder="e.g. bench press" value={query} onChangeText={setQuery} />
+        <View style={{ marginTop: space.sm }}>
+          <ChipSelect label="Muscle" options={MUSCLE_OPTIONS} value={muscle} onChange={setMuscle} formatOption={formatLabel} />
+          <ChipSelect
+            label="Equipment"
+            options={EQUIPMENT_OPTIONS}
+            value={equipment}
+            onChange={setEquipment}
+            formatOption={formatLabel}
+          />
+        </View>
       </View>
       {isLoading ? <ActivityIndicator style={{ marginTop: space.md }} color={colors.primary} /> : null}
       {error ? (
@@ -67,10 +87,10 @@ export function ExerciseLibraryScreen({ navigation, route }: Props) {
       ) : null}
       <FlatList
         style={{ marginTop: space.sm }}
-        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xl }}
-        data={exercises}
+        contentContainerStyle={styles.listContent}
+        data={filtered}
         keyExtractor={(item) => item.id}
-        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: colors.separator }} />}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
           <ListRow
             title={item.name}
