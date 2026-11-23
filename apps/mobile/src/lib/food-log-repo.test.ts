@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   applyRemote,
+  dailyTotalsBetween,
   getDirty,
   insert,
   listByLocalDay,
@@ -111,6 +112,36 @@ describe("food-log-repo", () => {
       const days = await listLoggedLocalDays(db, "account-1", "2026-01-01");
 
       expect(days).toEqual(["2026-11-14"]);
+    });
+  });
+
+  describe("dailyTotalsBetween", () => {
+    it("sums kcal/protein per local day, grouping multiple entries on the same day", async () => {
+      await insert(db, ROW); // 2026-11-14, kcal 195, protein 4
+      await insert(db, { ...ROW, id: "same-day-2", loggedAt: "2026-11-14T18:00:00.000Z", macros: { kcal: 300, proteinG: 20, fatG: 10, carbG: 30 } });
+
+      const totals = await dailyTotalsBetween(db, "account-1", "2026-11-01", "2026-11-30");
+
+      expect(totals).toEqual([{ date: "2026-11-14", kcal: 495, proteinG: 24 }]);
+    });
+
+    it("excludes deleted entries, other accounts, and days outside the range", async () => {
+      await insert(db, ROW); // 2026-11-14, account-1
+      await insert(db, { ...ROW, id: "deleted", isDeleted: true });
+      await insert(db, { ...ROW, id: "other-account", accountId: "account-2" });
+      await insert(db, { ...ROW, id: "out-of-range", loggedAt: "2026-10-01T12:00:00.000Z" });
+
+      const totals = await dailyTotalsBetween(db, "account-1", "2026-11-01", "2026-11-30");
+
+      expect(totals).toEqual([{ date: "2026-11-14", kcal: 195, proteinG: 4 }]);
+    });
+
+    it("returns an empty array for a range with nothing logged", async () => {
+      await insert(db, ROW);
+
+      const totals = await dailyTotalsBetween(db, "account-1", "2025-01-01", "2025-01-31");
+
+      expect(totals).toEqual([]);
     });
   });
 

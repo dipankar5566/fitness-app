@@ -2,6 +2,7 @@ import Svg, { Circle, Line, Polyline } from "react-native-svg";
 import { View } from "react-native";
 import { makeStyles, radius, space, useTheme } from "../theme";
 import { AppText } from "./ui";
+import type { ProgressDay } from "@fitness-app/shared";
 
 /**
  * ProgressRing + MacroBar + LineSpark - the hero calorie ring, macro bars, and weight-trend
@@ -177,6 +178,76 @@ export function LineSpark({ values, width = 240, height = 48, color, unit = "" }
         <AppText variant="micro" color={colors.textTertiary}>
           {max}{unit}
         </AppText>
+      </View>
+    </View>
+  );
+}
+
+interface BarChartProps {
+  /** Chronological (oldest -> newest). `hasData: false` renders as an empty-track bar, not a real
+   * zero-height bar - a day with nothing logged must look visually distinct from a logged-but-zero
+   * day (there is no such day in practice, but the Progress tab's "never fabricate data" rule
+   * means a gap has to read as a gap at a glance). */
+  data: readonly Pick<ProgressDay, "date" | "kcal" | "hasData">[];
+  /** A horizontal reference line (e.g. the daily kcal target) drawn across all bars. */
+  target?: number;
+  color?: string;
+  height?: number;
+}
+
+const BAR_CHART_MIN_SCALE = 1; // avoids a divide-by-zero when every bar (and the target) is 0
+
+const useBarChartStyles = makeStyles((colors) => ({
+  wrap: { width: "100%" },
+  barsRow: { flexDirection: "row", alignItems: "flex-end", width: "100%" },
+  barColumn: { flex: 1, alignItems: "center", justifyContent: "flex-end" },
+  bar: { width: "55%", minHeight: 2, borderRadius: 3, backgroundColor: colors.primary },
+  barEmpty: { backgroundColor: colors.surfaceAlt },
+  targetLine: { height: 1, backgroundColor: colors.textTertiary, width: "100%", marginBottom: space.xxs },
+  labelsRow: { flexDirection: "row", width: "100%", marginTop: space.xxs },
+}));
+
+/** A simple daily bar chart (kcal vs. a target reference line) - no new chart dependency, same
+ * all-SVG-or-plain-View approach as ProgressRing/LineSpark. Renders every day in `data`, including
+ * ones with no logged entry (shown as a faint empty bar), so a gap in the trend is visible rather
+ * than silently skipped. */
+export function BarChart({ data, target, color, height = 96 }: BarChartProps) {
+  const styles = useBarChartStyles();
+  const { colors } = useTheme();
+  const barColor = color ?? colors.primary;
+  if (data.length === 0) {
+    return null;
+  }
+  const maxValue = Math.max(BAR_CHART_MIN_SCALE, target ?? 0, ...data.map((d) => d.kcal));
+  const targetRatio = target != null ? Math.min(1, target / maxValue) : null;
+
+  return (
+    <View
+      style={styles.wrap}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`Daily trend over ${data.length} days${target != null ? `, against a target of ${Math.round(target)}` : ""}`}
+    >
+      <View style={{ height, justifyContent: "flex-end" }}>
+        {targetRatio != null ? (
+          <View style={[styles.targetLine, { position: "absolute", bottom: height * targetRatio }]} />
+        ) : null}
+        <View style={[styles.barsRow, { height }]}>
+          {data.map((day) => {
+            const ratio = day.hasData ? Math.max(0, Math.min(1, day.kcal / maxValue)) : 0;
+            return (
+              <View key={day.date} style={styles.barColumn}>
+                <View
+                  style={[
+                    styles.bar,
+                    { height: Math.max(2, height * ratio), backgroundColor: barColor },
+                    !day.hasData && styles.barEmpty,
+                  ]}
+                />
+              </View>
+            );
+          })}
+        </View>
       </View>
     </View>
   );

@@ -11,6 +11,7 @@ import {
   getLastUsedProgramDayId,
   insertSession,
   insertSet,
+  listSessionDaysBetween,
   listSetsForExercise,
   listSetsForSession,
   markSessionClean,
@@ -130,6 +131,29 @@ describe("workout-repo", () => {
     ]);
 
     expect(await getActiveSession(db, "account-1")).not.toBeNull();
+  });
+
+  describe("listSessionDaysBetween", () => {
+    it("returns each distinct session day in range, deduped and excluding deleted/other-account sessions", async () => {
+      await insertSession(db, SESSION); // account-1, 2026-11-16
+      await insertSession(db, { ...SESSION, id: "same-day-2", startedAt: "2026-11-16T18:00:00.000Z" });
+      await insertSession(db, { ...SESSION, id: "other-day", startedAt: "2026-11-14T08:00:00.000Z" });
+      await insertSession(db, { ...SESSION, id: "deleted-day", startedAt: "2026-11-10T08:00:00.000Z", isDeleted: true });
+      await insertSession(db, { ...SESSION, id: "other-account", accountId: "account-2", startedAt: "2026-11-12T08:00:00.000Z" });
+
+      const days = await listSessionDaysBetween(db, "account-1", "2026-11-01", "2026-11-30");
+
+      expect(new Set(days)).toEqual(new Set(["2026-11-16", "2026-11-14"]));
+    });
+
+    it("excludes days outside the requested range", async () => {
+      await insertSession(db, SESSION); // 2026-11-16
+      await insertSession(db, { ...SESSION, id: "out-of-range", startedAt: "2025-01-01T08:00:00.000Z" });
+
+      const days = await listSessionDaysBetween(db, "account-1", "2026-11-01", "2026-11-30");
+
+      expect(days).toEqual(["2026-11-16"]);
+    });
   });
 
   it("applyRemoteSets preserves the local exerciseName snapshot across a pull", async () => {

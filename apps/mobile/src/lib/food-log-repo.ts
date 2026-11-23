@@ -110,6 +110,31 @@ export async function listLoggedLocalDays(db: SqlDb, accountId: string, sinceDat
   return rows.map((row) => row.day);
 }
 
+export interface DailyFoodTotal {
+  date: string;
+  kcal: number;
+  proteinG: number;
+}
+
+/** Per local-day kcal/protein totals between two dates (inclusive), grouped in SQL - feeds the
+ * Progress tab's calorie/protein trend (packages/shared's buildDailyCalorieSeries). Read-only, no
+ * new table/column. */
+export async function dailyTotalsBetween(
+  db: SqlDb,
+  accountId: string,
+  startDate: string,
+  endDate: string,
+): Promise<DailyFoodTotal[]> {
+  const rows = await db.getAllAsync<{ day: string; kcal: number | null; protein_g: number | null }>(
+    `SELECT substr(logged_at, 1, 10) AS day, SUM(kcal) AS kcal, SUM(protein_g) AS protein_g
+     FROM food_log
+     WHERE account_id = ? AND is_deleted = 0 AND substr(logged_at, 1, 10) BETWEEN ? AND ?
+     GROUP BY day`,
+    [accountId, startDate, endDate],
+  );
+  return rows.map((row) => ({ date: row.day, kcal: row.kcal ?? 0, proteinG: row.protein_g ?? 0 }));
+}
+
 export async function softDelete(db: SqlDb, id: string, updatedAt: string): Promise<void> {
   await db.runAsync(
     "UPDATE food_log SET is_deleted = 1, updated_at = ?, is_dirty = 1 WHERE id = ?",

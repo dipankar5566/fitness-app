@@ -10,3 +10,4 @@ export * from "./food-relevance.ts";
 export * from "./fasting.ts";
 export * from "./achievements.ts";
 export * from "./meal-plan.ts";
+export * from "./progress.ts";

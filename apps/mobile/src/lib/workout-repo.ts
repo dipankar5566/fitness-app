@@ -133,6 +133,24 @@ export async function getLastUsedProgramDayId(
   return row?.program_day_id ?? null;
 }
 
+/** Distinct local calendar days (started_at date prefix) with at least one non-deleted session
+ * between two dates (inclusive) - feeds the Progress tab's workout-consistency grid
+ * (packages/shared's buildWorkoutConsistency), which only needs "which days", not the sessions
+ * themselves. */
+export async function listSessionDaysBetween(
+  db: SqlDb,
+  accountId: string,
+  startDate: string,
+  endDate: string,
+): Promise<string[]> {
+  const rows = await db.getAllAsync<{ day: string }>(
+    `SELECT DISTINCT substr(started_at, 1, 10) AS day FROM workout_session
+     WHERE account_id = ? AND is_deleted = 0 AND substr(started_at, 1, 10) BETWEEN ? AND ?`,
+    [accountId, startDate, endDate],
+  );
+  return rows.map((row) => row.day);
+}
+
 export async function getDirtySessions(db: SqlDb): Promise<LocalWorkoutSession[]> {
   const rows = await db.getAllAsync<WorkoutSessionSqlRow>("SELECT * FROM workout_session WHERE is_dirty = 1");
   return rows.map(fromSessionRow);

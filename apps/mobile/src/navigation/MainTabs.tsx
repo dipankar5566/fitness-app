@@ -3,6 +3,7 @@ import type { CompositeScreenProps } from "@react-navigation/native";
 import { createBottomTabNavigator, type BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { HomeScreen } from "../screens/HomeScreen";
+import { ProgressScreen } from "../screens/ProgressScreen";
 import { LogTabScreen, MeTabScreen, WorkoutTabScreen } from "../screens/TabScreens";
 import { textVariants, useTheme } from "../theme";
 import type { RootStackParamList } from "./RootNavigator";
@@ -18,6 +19,7 @@ export type MainTabParamList = {
   Today: { accountId: string };
   Log: { accountId: string };
   Workout: { accountId: string };
+  Progress: { accountId: string };
   Me: { accountId: string };
 };
 
@@ -35,6 +37,7 @@ const TAB_ICONS: Record<keyof MainTabParamList, keyof typeof MaterialCommunityIc
   Today: "home-variant",
   Log: "plus-circle-outline",
   Workout: "dumbbell",
+  Progress: "chart-line",
   Me: "account-circle-outline",
 };
 
@@ -64,6 +67,7 @@ export function MainTabs({ route }: Props) {
       <Tab.Screen name="Today" component={HomeScreen} initialParams={{ accountId }} />
       <Tab.Screen name="Log" component={LogTabScreen} initialParams={{ accountId }} />
       <Tab.Screen name="Workout" component={WorkoutTabScreen} initialParams={{ accountId }} />
+      <Tab.Screen name="Progress" component={ProgressScreen} initialParams={{ accountId }} />
       <Tab.Screen name="Me" component={MeTabScreen} initialParams={{ accountId }} />
     </Tab.Navigator>
   );
