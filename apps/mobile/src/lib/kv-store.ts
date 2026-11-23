@@ -20,6 +20,10 @@ export const REMINDER_SETTINGS_KEY = "reminder_settings";
 // write); HomeScreen reads it to decide whether to show the "Today's activity" card, and
 // WorkoutSessionScreen reads it to decide whether to write an ended session to Health Connect.
 export const HC_SETTINGS_KEY = "health_connect_settings";
+// HomeScreen writes this (an ISO timestamp) right after it actually reads any enabled Health
+// Connect data type; HealthConnectScreen reads it back to show "last read" - a settings-screen
+// visit alone never updates it, only a real read does.
+export const HC_LAST_READ_KEY = "health_connect_last_read";
 // Badge ids already shown as a "new achievement" banner on this device (achievements-repo.ts).
 // Per-device UI state, so kv rather than a synced table - badges themselves are derived, not stored.
 export const ACHIEVEMENTS_SEEN_KEY = "achievements_seen";

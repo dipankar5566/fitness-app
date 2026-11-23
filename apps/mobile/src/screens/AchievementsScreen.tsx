@@ -3,12 +3,12 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { AppText, Card, Screen, SectionHeader } from "../components/ui";
 import { loadAchievements, markBadgesSeen } from "../lib/achievements-repo";
 import { getDatabase } from "../lib/db";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, radius, space } from "../theme";
+import { makeStyles, radius, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Achievements">;
 
@@ -17,8 +17,27 @@ type Props = NativeStackScreenProps<RootStackParamList, "Achievements">;
  * mirror via achievements-repo.ts - no network. Opening this screen marks every unlocked badge as
  * seen, so Today's "new badge" banner doesn't repeat what the user is looking at right now.
  */
+const useStyles = makeStyles((colors) => ({
+  levelRow: { flexDirection: "row", alignItems: "center" },
+  levelBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryTonal,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  track: { height: 6, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginTop: space.sm, overflow: "hidden" },
+  fill: { height: 6, borderRadius: radius.pill, backgroundColor: colors.primary },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.md },
+  badge: { width: "48%", alignItems: "center", paddingVertical: space.lg },
+  badgeLocked: { opacity: 0.6 },
+}));
+
 export function AchievementsScreen({ route }: Props) {
   const { accountId } = route.params;
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [summary, setSummary] = useState<AchievementSummary | null>(null);
 
   useFocusEffect(
@@ -89,20 +108,3 @@ export function AchievementsScreen({ route }: Props) {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  levelRow: { flexDirection: "row", alignItems: "center" },
-  levelBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryTonal,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  track: { height: 6, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, marginTop: space.sm, overflow: "hidden" },
-  fill: { height: 6, borderRadius: radius.pill, backgroundColor: colors.primary },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.md },
-  badge: { width: "48%", alignItems: "center", paddingVertical: space.lg },
-  badgeLocked: { opacity: 0.6 },
-});

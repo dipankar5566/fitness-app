@@ -9,11 +9,12 @@ import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { CACHED_PROFILE_KEY, getKv, setKv } from "../lib/kv-store";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "GuestLoading">;
 
 export function GuestLoadingScreen({ navigation }: Props) {
+  const { colors } = useTheme();
   const [error, setError] = useState<string | null>(null);
 
   const routeToNextScreen = useCallback(

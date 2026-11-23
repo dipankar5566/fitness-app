@@ -54,7 +54,7 @@ import {
   WEIGHT_IMPORT_LOOKBACK_DAYS,
   type HcExerciseSessionSummary,
 } from "../lib/health-connect";
-import { CACHED_GOAL_KEY, CACHED_PROFILE_KEY, getKv, setKv } from "../lib/kv-store";
+import { CACHED_GOAL_KEY, CACHED_PROFILE_KEY, HC_LAST_READ_KEY, getKv, setKv } from "../lib/kv-store";
 import type { SqlDb } from "../lib/sql-db";
 import { syncNow } from "../lib/sync-engine";
 import { getActiveSession, listSetsForSession } from "../lib/workout-repo";
@@ -257,6 +257,7 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
     const hcStatus = await getHcStatus();
     if (hcStatus === "available") {
       const hcSettings = await loadHcSettings(db);
+      const anyTypeEnabled = hcSettings.steps || hcSettings.exercise || hcSettings.sleep || hcSettings.weight;
       if (hcSettings.steps) {
         setHcSteps(await readTodaySteps());
       }
@@ -270,6 +271,11 @@ export function HomeScreen({ navigation, route }: MainTabScreenProps<"Today">) {
       if (hcSettings.weight) {
         const since = new Date(Date.now() - WEIGHT_IMPORT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
         void importHcWeights(db, API_URL, session.accessToken, accountId, since);
+      }
+      // Only a real read updates this - a settings-screen visit with everything toggled off never
+      // should, so HealthConnectScreen's "last read" never implies data that was never fetched.
+      if (anyTypeEnabled) {
+        await setKv(db, HC_LAST_READ_KEY, new Date().toISOString());
       }
     }
 

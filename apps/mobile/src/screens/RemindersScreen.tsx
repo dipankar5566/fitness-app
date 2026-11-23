@@ -1,7 +1,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
 import { Alert, Switch, View } from "react-native";
-import { AppText, Button, Card, SectionHeader, TextField } from "../components/ui";
+import { AppText, Button, Card, Screen, SectionHeader, TextField } from "../components/ui";
 import { getDatabase } from "../lib/db";
 import {
   ensureNotificationPermission,
@@ -11,7 +11,7 @@ import {
   type ReminderSetting,
 } from "../lib/reminders";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, space } from "../theme";
+import { space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Reminders">;
 
@@ -34,6 +34,7 @@ function pad2(n: number): string {
  */
 export function RemindersScreen({ route }: Props) {
   void route.params.accountId; // reminders are device-local, not account-scoped
+  const { colors } = useTheme();
   const [settings, setSettings] = useState<ReminderSetting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -85,14 +86,14 @@ export function RemindersScreen({ route }: Props) {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, padding: space.lg }}>
+      <Screen>
         <AppText variant="body" color={colors.textSecondary}>Loading…</AppText>
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, padding: space.lg }}>
+    <Screen scroll>
       <SectionHeader title="Reminders" />
       <Card>
         {settings.map((reminder, index) => (
@@ -135,6 +136,6 @@ export function RemindersScreen({ route }: Props) {
         loading={isSaving}
         style={{ marginTop: space.lg }}
       />
-    </View>
+    </Screen>
   );
 }

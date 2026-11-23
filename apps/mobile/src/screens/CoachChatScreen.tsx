@@ -1,7 +1,7 @@
 import { COACH_PROMPT_SUGGESTIONS, MEDICAL_DISCLAIMER } from "@fitness-app/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
 import { AppText, Card, IconButton, TextField } from "../components/ui";
 import {
   AiQuotaExceededError,
@@ -14,7 +14,7 @@ import {
 import { loadGuestSession } from "../lib/auth-storage";
 import { API_URL } from "../lib/env";
 import type { RootStackParamList } from "../navigation/RootNavigator";
-import { colors, radius, space } from "../theme";
+import { makeStyles, radius, space, useTheme } from "../theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "CoachChat">;
 
@@ -34,8 +34,49 @@ function fromHistoryRow(row: CoachMessageRow): Message | null {
   return { id: row.id, role: row.role, content: row.content };
 }
 
+const useStyles = makeStyles((colors) => ({
+  flex: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.xxl },
+  promptChips: { marginTop: space.lg, gap: space.sm, alignSelf: "stretch" },
+  promptChip: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.pill,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    alignItems: "center",
+  },
+  promptChipPressed: { backgroundColor: colors.primaryTonal },
+  disclaimerBanner: {
+    padding: space.md,
+    backgroundColor: colors.accentTonal,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.stroke,
+  },
+  messages: { padding: space.lg, gap: space.sm, flexGrow: 1 },
+  bubbleRow: { flexDirection: "row" },
+  bubbleRowUser: { justifyContent: "flex-end" },
+  bubble: { maxWidth: "85%", paddingVertical: space.sm, paddingHorizontal: space.md, borderRadius: radius.lg },
+  bubbleAssistant: { backgroundColor: colors.surface },
+  bubbleUser: { backgroundColor: colors.primary, borderColor: colors.primary },
+  typingRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.lg, paddingBottom: space.xs },
+  errorBanner: { paddingHorizontal: space.lg, paddingBottom: space.xs },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: space.sm,
+    padding: space.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.stroke,
+    backgroundColor: colors.surface,
+  },
+  input: { flex: 1, maxHeight: 120 },
+}));
+
 export function CoachChatScreen({ route }: Props) {
   void route.params.accountId; // not needed directly - the server scopes everything by the JWT's accountId
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -180,42 +221,3 @@ export function CoachChatScreen({ route }: Props) {
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.xxl },
-  promptChips: { marginTop: space.lg, gap: space.sm, alignSelf: "stretch" },
-  promptChip: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: radius.pill,
-    paddingVertical: space.sm,
-    paddingHorizontal: space.md,
-    alignItems: "center",
-  },
-  promptChipPressed: { backgroundColor: colors.primaryTonal },
-  disclaimerBanner: {
-    padding: space.md,
-    backgroundColor: colors.accentTonal,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.stroke,
-  },
-  messages: { padding: space.lg, gap: space.sm, flexGrow: 1 },
-  bubbleRow: { flexDirection: "row" },
-  bubbleRowUser: { justifyContent: "flex-end" },
-  bubble: { maxWidth: "85%", paddingVertical: space.sm, paddingHorizontal: space.md, borderRadius: radius.lg },
-  bubbleAssistant: { backgroundColor: colors.surface },
-  bubbleUser: { backgroundColor: colors.primary, borderColor: colors.primary },
-  typingRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.lg, paddingBottom: space.xs },
-  errorBanner: { paddingHorizontal: space.lg, paddingBottom: space.xs },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: space.sm,
-    padding: space.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.stroke,
-    backgroundColor: colors.surface,
-  },
-  input: { flex: 1, maxHeight: 120 },
-});
