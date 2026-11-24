@@ -26,6 +26,15 @@ const guestAuthResponseSchema = z.object({
 
 export type GuestAuthResponse = z.infer<typeof guestAuthResponseSchema>;
 
+const googleAuthResponseSchema = z.object({
+  accessToken: z.string(),
+  accountId: z.string(),
+  isGuest: z.literal(false),
+  email: z.string(),
+});
+
+export type GoogleAuthResponse = z.infer<typeof googleAuthResponseSchema>;
+
 export class ApiError extends Error {}
 
 /** The AI daily-quota guard (apps/api/src/ai/ai-usage.service.ts) rejects with 403 - distinct from
@@ -38,6 +47,14 @@ export function isNetworkError(error: unknown): boolean {
   return error instanceof TypeError;
 }
 
+/** Every throw site here embeds the response status in the message ("... failed with status
+ * ${status}") rather than carrying it as a field - this reads that back for the one place
+ * (GuestLoadingScreen, an expired 30-day Google JWT) that needs to tell a 401 apart from any other
+ * failure, without widening ApiError's shape for every other caller. */
+export function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof ApiError && /status 401\b/.test(error.message);
+}
+
 /** Calls POST /auth/guest on the API (guest-first auth - CLAUDE.md "Architecture rules"). */
 export async function createGuestAccount(apiUrl: string): Promise<GuestAuthResponse> {
   const response = await fetch(`${apiUrl}/auth/guest`, { method: "POST" });
@@ -45,6 +62,29 @@ export async function createGuestAccount(apiUrl: string): Promise<GuestAuthRespo
     throw new ApiError(`guest auth failed with status ${response.status}`);
   }
   return guestAuthResponseSchema.parse(await response.json());
+}
+
+/** Calls POST /auth/google. `guestToken`, if the device has one, lets the server upgrade/merge the
+ * guest account in place (apps/api/src/auth/auth.service.ts's signInWithGoogle) - sent as a bearer
+ * token even though this endpoint doesn't require auth itself, since that's the only slot the
+ * guest JWT fits in without inventing a second request shape. */
+export async function signInWithGoogle(
+  apiUrl: string,
+  idToken: string,
+  guestToken?: string,
+): Promise<GoogleAuthResponse> {
+  const response = await fetch(`${apiUrl}/auth/google`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(guestToken ? { Authorization: `Bearer ${guestToken}` } : {}),
+    },
+    body: JSON.stringify({ idToken }),
+  });
+  if (!response.ok) {
+    throw new ApiError(`google sign-in failed with status ${response.status}`);
+  }
+  return googleAuthResponseSchema.parse(await response.json());
 }
 
 // Mirrors the API's actual response shape (raw app.profile/app.goal rows), not the camelCase

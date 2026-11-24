@@ -25,6 +25,7 @@ import { MyFoodsScreen } from "../screens/MyFoodsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { ProgramsScreen } from "../screens/ProgramsScreen";
 import { RemindersScreen } from "../screens/RemindersScreen";
+import { WelcomeScreen } from "../screens/WelcomeScreen";
 import { WorkoutSessionScreen } from "../screens/WorkoutSessionScreen";
 import { fontFamily, useTheme } from "../theme";
 
@@ -36,7 +37,8 @@ export interface PickedIngredient {
 
 export type RootStackParamList = {
   GuestLoading: undefined;
-  Onboarding: { accountId: string };
+  Welcome: undefined;
+  Onboarding: { accountId: string; mode?: "edit" };
   Home: { accountId: string };
   FoodSearch: {
     accountId: string;
@@ -67,10 +69,13 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const navigationRef = createNavigationContainerRef<RootStackParamList>();
+// Exported so a screen nested under a sub-navigator (e.g. MeTabScreen, under the bottom-tab
+// navigator that's itself the root stack's "Home" screen) can reset the ROOT stack after sign-in/
+// sign-out - that screen's own `navigation` prop only reaches the tab navigator, not this one.
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 /** Screens a deep link must wait behind - the guest session/onboarding hasn't resolved yet. */
-const DEEP_LINK_BLOCKING_ROUTES = new Set<string>(["GuestLoading", "Onboarding"]);
+const DEEP_LINK_BLOCKING_ROUTES = new Set<string>(["GuestLoading", "Welcome", "Onboarding"]);
 
 /**
  * Widget deep links (lib/deep-links.ts). A link can arrive before the navigator is ready or while
@@ -142,6 +147,11 @@ export function RootNavigator() {
         <Stack.Screen
           name="GuestLoading"
           component={GuestLoadingScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Welcome"
+          component={WelcomeScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen

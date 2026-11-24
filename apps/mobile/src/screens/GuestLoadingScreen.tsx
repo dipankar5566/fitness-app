@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { AppText, Button, Screen } from "../components/ui";
 import { identifyGuest, trackEvent } from "../lib/analytics";
-import { createGuestAccount, getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
-import { loadGuestSession, saveGuestSession } from "../lib/auth-storage";
+import { createGuestAccount, getProfile, isNetworkError, isUnauthorizedError, type GetProfileResponse } from "../lib/api";
+import { loadGuestSession, saveGuestSession, wasSignedOut } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
 import { API_URL } from "../lib/env";
 import { CACHED_PROFILE_KEY, getKv, setKv } from "../lib/kv-store";
@@ -29,6 +29,12 @@ export function GuestLoadingScreen({ navigation }: Props) {
           navigation.replace("Onboarding", { accountId });
         }
       } catch (err) {
+        // An expired 30-day JWT on a Google session - distinct from "could not reach the server",
+        // since the device IS reachable here, it just needs to sign in again.
+        if (isUnauthorizedError(err)) {
+          navigation.replace("Welcome");
+          return;
+        }
         if (!isNetworkError(err)) {
           throw err;
         }
@@ -60,6 +66,13 @@ export function GuestLoadingScreen({ navigation }: Props) {
           await routeToNextScreen(existing.accountId, existing.accessToken);
           return;
         }
+        // A missing session after an explicit sign-out means "show Welcome", not "silently create
+        // a new guest" - every session that predates Google Sign-In never set this flag, so a
+        // genuine first launch still falls through to guest creation below as before.
+        if (await wasSignedOut()) {
+          navigation.replace("Welcome");
+          return;
+        }
         const session = await createGuestAccount(API_URL);
         await saveGuestSession(session);
         identifyGuest(session.accountId);
@@ -70,7 +83,7 @@ export function GuestLoadingScreen({ navigation }: Props) {
         setError("Could not reach the server. Check your connection and try again.");
       }
     })();
-  }, [routeToNextScreen]);
+  }, [navigation, routeToNextScreen]);
 
   useEffect(() => {
     establishSession();

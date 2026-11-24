@@ -32,6 +32,7 @@
     },
     "plugins": [
       "@sentry/react-native/expo",
+      "@react-native-google-signin/google-signin",
       "expo-font",
       "expo-notifications",
       "react-native-health-connect",

@@ -645,13 +645,69 @@ locking files mid-move during `pnpm install`/native builds (`pnpm install --forc
 `nodeLinker` change otherwise fails intermittently with `Access is denied` on a different file each
 retry - clearing the one locked file and retrying works too, just slower).
 
+**Google Sign-In, sign-out, and edit profile/goal (cross-cutting, not a roadmap milestone).** The
+app had no way to sign out or change the profile/goal after onboarding, and guests had no way to
+keep their data if they lost the device - this adds the first real auth method on top of the
+existing guest-only JWT. `app.account` gained `google_sub` (`0014_account_google.sql`).
+`apps/api/src/auth/google-token-verifier.ts` verifies a Google ID token via `google-auth-library`'s
+`OAuth2Client` (behind the `GOOGLE_TOKEN_VERIFIER` DI token, mocked in tests the same way
+`AI_PROVIDER` is). `AuthService.signInWithGoogle` / `POST /auth/google` covers three cases: upgrade
+a guest in place (same account_id), create a new Google account, or merge a guest into an existing
+Google account - the merge (`AccountMergeService`) reassigns every account-scoped table's
+`account_id`, with explicit conflict rules for `profile` (singleton, target wins if it has one),
+`goal` (guest's goals demoted to inactive history if the target already has an active one), and the
+per-day caches `coach_daily_insight`/`meal_plan` (target's cached day wins). `apps/mobile`'s
+`auth-storage.ts` gained `isGuest`/`email` on the stored session plus `clearSession`/
+`markSignedOut`/`wasSignedOut`/`clearSignedOutFlag`; `lib/google-auth.ts` wraps
+`@react-native-google-signin/google-signin`; `lib/account-auth.ts` is where the actual sign-in
+(push unsynced data, prompt, upgrade-or-merge) and sign-out (push, confirm data loss if anything's
+still dirty, wipe) flows live, independent of any screen so they're unit-testable with mocked
+dependencies. `lib/local-wipe.ts`'s `wipeAccountData` clears every synced/cache table and
+account-scoped `kv` key but keeps the device-level theme/reminder preferences - used both on
+sign-out and before a merge-sign-in repulls everything. A new `WelcomeScreen` ("Continue with
+Google" / "Continue as guest") is what `GuestLoadingScreen` opens instead of silently creating a
+guest once `wasSignedOut()` is true, or on a 401 from an expired 30-day Google JWT.
+`OnboardingScreen` gained a `mode: "edit"` route param (skips the welcome step, submits through the
+same existing `PUT /profile`, then refreshes the profile/goal caches and the widget directly since
+this path doesn't go through `/sync`) - the Me tab's Daily Target card is now tappable into this,
+and a new Account card has "Edit profile & goal" plus "Sign out" (Google accounts) or
+"Create account / Sign in" (guests). Out of scope for this pass: refresh tokens (an expired JWT
+just sends the user back to Welcome), phone OTP/email-password sign-in, and account
+deletion/export (DPDP, M6).
+
+Verified against the real `indb` database and a real Google Cloud OAuth app (not mocked): all three
+`signInWithGoogle` paths plus `AccountMergeService`'s conflict rules via `apps/api` unit tests (127
+tests green); `apps/mobile`'s auth-storage/account-auth/local-wipe logic via unit tests with mocked
+SecureStore/`google-auth`/`sync-engine` (200 tests green). **On a real Android emulator**: full
+guest → onboarding → "Create account / Sign in" → real Google account picker → real merge into a
+pre-existing Google-linked account (profile/goal conflict resolved exactly per the coded rules,
+confirmed via psql) → Me tab shows "Signed in as ..." → Sign out → Welcome screen → Continue as
+guest → fresh onboarding again, all exercised live end-to-end.
+
+**Known trap, found getting Google Sign-In working on this machine: the project's debug keystore
+was the public, shared Expo/React Native template key** (`apps/mobile/android/app/debug.keystore`,
+a file `expo prebuild` writes from its own template - `CN=Android Debug, O=Unknown`, "Creation
+date: 01-Jan-2014"). Its SHA-1 is baked into countless public Expo project templates, so Google
+Cloud's "create Android OAuth client" rejected it as already in use (quite possibly by some
+unrelated project entirely). Fixed by generating a real, unique keystore (`keytool -genkeypair
+-keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA
+-keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"`) and registering **that**
+SHA-1 with Google instead. Since `expo prebuild` regenerates `android/` from scratch (and
+re-writes the shared template keystore right back), the unique keystore is kept **outside** that
+directory at `apps/mobile/debug.keystore` (committed - its password is Android's universally-known
+debug default, not a secret) with `android/app/build.gradle`'s `signingConfigs.debug.storeFile`
+repointed at `file('../../debug.keystore')` - like the long-path workaround above, that one-line
+repoint needs re-adding after any `expo prebuild` that regenerates `build.gradle`, or the app will
+silently sign with the shared template key again and the next Google sign-in attempt will fail
+with a SHA-1 mismatch.
+
 ## Repo map
 
 ```
 apps/
   api/                 NestJS API (TypeScript, ESM). src/<feature>/*.controller.ts,
                        *.service.ts, *.module.ts. dev script uses tsc-watch, NOT tsx (see below).
-                       Features so far: health, auth (guest JWT), food (search + detail),
+                       Features so far: health, auth (guest JWT + Google Sign-In/merge), food (search + detail),
                        food-log (manual meal log CRUD), profile (onboarding + targets), sync
                        (push/pull), exercise (library + muscle/equipment filters), program
                        (built-in program library, nested days/exercises), ai (OpenAI-backed

@@ -10,8 +10,11 @@ import { trackEvent } from "../lib/analytics";
 import { ApiError, submitOnboarding } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
 import { API_URL } from "../lib/env";
+import { CACHED_GOAL_KEY, CACHED_PROFILE_KEY, setKv } from "../lib/kv-store";
+import { getDatabase } from "../lib/db";
 import type { RootStackParamList } from "../navigation/RootNavigator";
 import { makeStyles, radius, space, useTheme } from "../theme";
+import { refreshTodayWidget } from "../widget/refresh";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Onboarding">;
 
@@ -78,7 +81,11 @@ const useStyles = makeStyles((colors) => ({
 export function OnboardingScreen({ navigation, route }: Props) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const [stepIndex, setStepIndex] = useState(0);
+  const isEditMode = route.params.mode === "edit";
+  // Edit mode skips the "welcome" intro step (step 0) and starts straight at the first question -
+  // per the interview, re-running onboarding to change the profile/goal starts blank, not
+  // pre-filled, so there's nothing to "resume" into; only the welcome intro itself is skippable.
+  const [stepIndex, setStepIndex] = useState(isEditMode ? 1 : 0);
   const [sex, setSex] = useState<Sex>("male");
   const [dobDay, setDobDay] = useState(1);
   const [dobMonth, setDobMonth] = useState(1);
@@ -118,7 +125,7 @@ export function OnboardingScreen({ navigation, route }: Props) {
       if (!session) {
         throw new Error("No guest session");
       }
-      await submitOnboarding(API_URL, session.accessToken, {
+      const result = await submitOnboarding(API_URL, session.accessToken, {
         sex,
         dob,
         heightCm,
@@ -127,13 +134,25 @@ export function OnboardingScreen({ navigation, route }: Props) {
         weightKg,
         goalMode,
       });
-      trackEvent("onboarding_completed");
+      trackEvent(isEditMode ? "profile_edited" : "onboarding_completed");
+
+      if (isEditMode) {
+        // This path never goes through /sync, so the caches Home/Me/widget read have to be
+        // refreshed directly here - the same two keys GuestLoadingScreen/HomeScreen already write.
+        const db = await getDatabase();
+        await setKv(db, CACHED_PROFILE_KEY, JSON.stringify(result.profile));
+        await setKv(db, CACHED_GOAL_KEY, JSON.stringify(result.goal));
+        await refreshTodayWidget();
+        navigation.goBack();
+        return;
+      }
+
       // Programs is the next stop, not Home - PRD section 5.4 ("programs selectable in
       // onboarding"). ProgramsScreen itself navigates on to Home once the user follows one or
       // skips.
       navigation.replace("Programs", { accountId: route.params.accountId });
     } catch (err) {
-      trackEvent("onboarding_failed");
+      trackEvent(isEditMode ? "profile_edit_failed" : "onboarding_failed");
       setSubmitError(
         err instanceof ApiError
           ? "Could not save your profile. Check your connection and try again."
@@ -154,6 +173,10 @@ export function OnboardingScreen({ navigation, route }: Props) {
   };
 
   const handleBack = () => {
+    if (isEditMode && stepIndex <= 1) {
+      navigation.goBack();
+      return;
+    }
     setStepIndex((index) => Math.max(0, index - 1));
   };
 

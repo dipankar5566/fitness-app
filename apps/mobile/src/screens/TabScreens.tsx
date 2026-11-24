@@ -1,8 +1,9 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
-import { Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { ChipSelect } from "../components/ChipSelect";
 import { AppText, Badge, Card, ListRow, Screen, SectionHeader } from "../components/ui";
+import { signInWithGoogleFlow, signOutFlow } from "../lib/account-auth";
 import { getProfile, isNetworkError, type GetProfileResponse } from "../lib/api";
 import { loadGuestSession } from "../lib/auth-storage";
 import { getDatabase } from "../lib/db";
@@ -10,7 +11,19 @@ import { API_URL } from "../lib/env";
 import { CACHED_GOAL_KEY, CACHED_PROFILE_KEY, getKv } from "../lib/kv-store";
 import { getActiveSession, listSetsForSession } from "../lib/workout-repo";
 import type { MainTabScreenProps } from "../navigation/MainTabs";
+import { navigationRef } from "../navigation/RootNavigator";
 import { makeStyles, space, tabularNumbers, useTheme, type ThemePreference } from "../theme";
+
+/** Promise wrapper around Alert.alert's two-button form, so signOutFlow's confirmDataLoss callback
+ * (plain async function, testable without react-native) can be satisfied by a real dialog here. */
+function confirmAsync(title: string, message: string, confirmLabel: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+      { text: confirmLabel, style: "destructive", onPress: () => resolve(true) },
+    ]);
+  });
+}
 
 /**
  * The three simpler tabs (Log/Workout/Me) - kept in one file since each is a short menu/summary
@@ -174,10 +187,13 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
   const { colors, preference, setPreference } = useTheme();
   const styles = useMeStyles();
   const [profile, setProfile] = useState<GetProfileResponse | null>(null);
+  const [account, setAccount] = useState<{ isGuest: boolean; email?: string }>({ isGuest: true });
+  const [isAccountBusy, setIsAccountBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     const session = await loadGuestSession();
     if (!session) return;
+    setAccount({ isGuest: session.isGuest !== false, email: session.email });
     const db = await getDatabase();
     try {
       const result = await getProfile(API_URL, session.accessToken);
@@ -203,28 +219,101 @@ export function MeTabScreen({ navigation, route }: MainTabScreenProps<"Me">) {
   const goal = profile?.goal;
   const dietType = profile?.profile?.diet_type;
 
+  const handleEditProfile = () => {
+    navigation.navigate("Onboarding", { accountId, mode: "edit" });
+  };
+
+  const resetToGuestLoading = () => {
+    navigationRef.reset({ index: 0, routes: [{ name: "GuestLoading" }] });
+  };
+
+  const handleSignIn = async () => {
+    if (isAccountBusy) return;
+    setIsAccountBusy(true);
+    try {
+      const db = await getDatabase();
+      await signInWithGoogleFlow(db, API_URL);
+      resetToGuestLoading();
+    } catch {
+      Alert.alert("Could not sign in", "Check your connection and try again.");
+    } finally {
+      setIsAccountBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (isAccountBusy) return;
+    setIsAccountBusy(true);
+    try {
+      const db = await getDatabase();
+      const result = await signOutFlow(db, API_URL, (count) =>
+        confirmAsync(
+          "Unsynced data",
+          `${count} ${count === 1 ? "entry" : "entries"} haven't finished syncing and will be lost if you sign out now. Sign out anyway?`,
+          "Sign out",
+        ),
+      );
+      if (result === "signed_out") {
+        resetToGuestLoading();
+      }
+    } catch {
+      Alert.alert("Could not sign out", "Check your connection and try again.");
+    } finally {
+      setIsAccountBusy(false);
+    }
+  };
+
   return (
     <Screen scroll edges={["top", "bottom"]}>
       <AppText variant="h1" style={{ marginBottom: space.lg }}>Me</AppText>
 
       <SectionHeader title="Daily target" />
+      <Pressable onPress={handleEditProfile}>
+        <Card>
+          {goal ? (
+            <>
+              <AppText variant="display" numbers>{Math.round(Number(goal.target_kcal))} kcal</AppText>
+              <AppText variant="body" color={colors.textSecondary} numbers style={{ marginTop: space.xxs }}>
+                {Math.round(Number(goal.target_protein_g))}g protein · {Math.round(Number(goal.target_carb_g))}g carb ·{" "}
+                {Math.round(Number(goal.target_fat_g))}g fat
+              </AppText>
+              {dietType ? (
+                <View style={{ marginTop: space.sm }}>
+                  <Badge label={dietType.replace(/_/g, " ")} />
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <AppText variant="body" color={colors.textSecondary}>Not set yet.</AppText>
+          )}
+          <AppText variant="micro" color={colors.textTertiary} style={{ marginTop: space.sm }}>
+            Tap to edit your profile & goal
+          </AppText>
+        </Card>
+      </Pressable>
+
+      <SectionHeader title="Account" style={{ marginTop: space.xxl }} />
       <Card>
-        {goal ? (
-          <>
-            <AppText variant="display" numbers>{Math.round(Number(goal.target_kcal))} kcal</AppText>
-            <AppText variant="body" color={colors.textSecondary} numbers style={{ marginTop: space.xxs }}>
-              {Math.round(Number(goal.target_protein_g))}g protein · {Math.round(Number(goal.target_carb_g))}g carb ·{" "}
-              {Math.round(Number(goal.target_fat_g))}g fat
-            </AppText>
-            {dietType ? (
-              <View style={{ marginTop: space.sm }}>
-                <Badge label={dietType.replace(/_/g, " ")} />
-              </View>
-            ) : null}
-          </>
+        {account.isGuest ? (
+          <ListRow
+            icon="account-plus-outline"
+            title="Create account / Sign in"
+            subtitle="Save your data and use it on another phone"
+            onPress={() => void handleSignIn()}
+          />
         ) : (
-          <AppText variant="body" color={colors.textSecondary}>Not set yet.</AppText>
+          <AppText variant="label" color={colors.textSecondary}>
+            Signed in as {account.email}
+          </AppText>
         )}
+        <Divider />
+        <ListRow icon="account-edit-outline" title="Edit profile & goal" onPress={handleEditProfile} />
+        {!account.isGuest ? (
+          <>
+            <Divider />
+            <ListRow icon="logout" title="Sign out" onPress={() => void handleSignOut()} />
+          </>
+        ) : null}
       </Card>
 
       <SectionHeader title="Preferences" style={{ marginTop: space.xxl }} />
