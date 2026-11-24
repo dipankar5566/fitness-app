@@ -15,3 +15,6 @@ export * from "./fasting.js";
 export * from "./achievements.js";
 export * from "./meal-plan.js";
 export * from "./progress.js";
+export * from "./food-category.js";
+export * from "./nutrition-validation.js";
+export * from "./recipe-calc.js";

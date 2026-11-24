@@ -15,3 +15,4 @@ indb/data/raw/
 .vscode/
 android/
 ios/
+db/audit-output/

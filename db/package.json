@@ -10,6 +10,10 @@
     "backfill:relevance": "tsx backfill-meal-relevance.ts",
     "import:exercises": "tsx import-exercises.ts",
     "seed:programs": "tsx seed-programs.ts",
+    "audit:food": "tsx audit-food-data.ts",
+    "recalc:recipes": "tsx recalc-recipes.ts",
+    "backfill:food-log-snapshot": "tsx backfill-food-log-snapshot.ts",
+    "apply:phase6-corrections": "tsx apply-phase6-corrections.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -20,7 +20,7 @@ import type {
 import type { PoolClient } from "pg";
 import { z, ZodError, type ZodTypeAny } from "zod";
 import { DatabaseService } from "../database/database.service.js";
-import { enrichWithMacros, type FoodLogRow } from "../food-log/food-log.service.js";
+import { computeNutritionSnapshot, enrichWithMacros, type FoodLogRow } from "../food-log/food-log.service.js";
 import { FoodService } from "../food/food.service.js";
 import { PackagedFoodService } from "../packaged-food/packaged-food.service.js";
 
@@ -369,6 +369,15 @@ export class SyncService {
           const result = await client.query(adapter.upsertSql, adapter.upsertParams(accountId, row));
           if (result.rowCount && result.rowCount > 0) {
             applied.push(row.id);
+            if (pushRow.table === "food_log") {
+              // This is the real write path for offline-first mobile logging (the outbox pushes
+              // here, not through FoodLogService.create - see CLAUDE.md's food-log-repo.ts note).
+              // Computed and stored once, in the same transaction as the upsert, so
+              // enrichWithMacros never has to re-derive it later - see that function's own
+              // docstring (docs/FOOD_DATABASE_AUDIT.md finding #10) for why a snapshot is never
+              // recomputed after this point.
+              await this.writeFoodLogSnapshot(client, row);
+            }
           } else {
             rejected.push({
               id: row.id,
@@ -406,6 +415,46 @@ export class SyncService {
       return "stale";
     }
     return existing.rows[0].account_id === accountId ? "stale" : "not_owner";
+  }
+
+  /** Computes and stores a food_log row's nutrition snapshot right after its upsert lands - see
+   * docs/FOOD_DATABASE_AUDIT.md finding #10 and `computeNutritionSnapshot`'s docstring. The read
+   * side (`computeNutritionSnapshot`) goes through the normal pooled connection (`this.db`), same
+   * as `pull()`'s `enrichWithMacros` call already does - it only reads tables this transaction
+   * never writes to (public.food*, app.custom_food_ingredient, app.packaged_food,
+   * app.food_nutrition), so there's no isolation concern in reading them outside the transaction.
+   * The actual UPDATE runs on `client`, inside the same transaction as the row's own upsert, so a
+   * reader can never observe the row committed without its snapshot. */
+  private async writeFoodLogSnapshot(
+    client: PoolClient,
+    row: Record<string, unknown> & { id: string },
+  ): Promise<void> {
+    const snapshot = await computeNutritionSnapshot(
+      {
+        food_source: row.foodSource as string,
+        food_ref: row.foodRef as string,
+        quantity: String(row.quantity),
+        unit: row.unit as string,
+      },
+      this.food,
+      this.db,
+      this.packagedFood,
+    );
+    await client.query(
+      `UPDATE app.food_log SET
+         kcal_snapshot = $2, protein_g_snapshot = $3, fat_g_snapshot = $4, carb_g_snapshot = $5,
+         nutrition_confidence = $6, nutrition_version = $7
+       WHERE id = $1`,
+      [
+        row.id,
+        snapshot.macros?.kcal ?? null,
+        snapshot.macros?.proteinG ?? null,
+        snapshot.macros?.fatG ?? null,
+        snapshot.macros?.carbG ?? null,
+        snapshot.confidence,
+        snapshot.version ?? 0,
+      ],
+    );
   }
 
   async pull(accountId: string, since: string | null): Promise<SyncPullResponse> {

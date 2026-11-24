@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["migrate.ts", "backfill-diet-class.ts"]
+  "include": ["migrate.ts", "backfill-diet-class.ts", "audit-food-data.ts", "recalc-recipes.ts", "backfill-food-log-snapshot.ts", "apply-phase6-corrections.ts"]
 }

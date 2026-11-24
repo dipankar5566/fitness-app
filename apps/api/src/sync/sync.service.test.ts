@@ -30,7 +30,10 @@ describe("SyncService", () => {
   beforeEach(async () => {
     client = { query: vi.fn() };
     db = {
-      query: vi.fn(),
+      // Default: no app.food_nutrition correction exists for any code - matches reality today
+      // (0013_food_nutrition_overlay.sql's overlay table is empty) and means a push test that
+      // doesn't care about the snapshot write doesn't need to mock this extra read itself.
+      query: vi.fn().mockResolvedValue({ rows: [] }),
       transaction: vi.fn(async (fn: (c: typeof client) => Promise<unknown>) => fn(client)),
     };
     food = { getNutrientSummaries: vi.fn().mockResolvedValue(new Map()) };
@@ -60,6 +63,39 @@ describe("SyncService", () => {
         expect.stringContaining("INSERT INTO app.food_log"),
         expect.arrayContaining(["account-1"]),
       );
+    });
+
+    it("computes and writes a real nutrition snapshot, in the same transaction, right after a food_log upsert lands", async () => {
+      client.query.mockResolvedValueOnce({ rowCount: 1 }); // the upsert itself
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["L002", { name: "Idli", kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
+        ]),
+      );
+
+      await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "food_log", op: "upsert", row: validUpsertRow }], // quantity: 150, unit: "g"
+      });
+
+      // The snapshot UPDATE runs on `client` (the same transaction), not `db` (the pooled
+      // connection) - see writeFoodLogSnapshot's docstring for why.
+      expect(client.query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("UPDATE app.food_log"),
+        [validUpsertRow.id, 195, 4.1, 0.5, 42, "verified", 0],
+      );
+    });
+
+    it("does not attempt a nutrition snapshot for a delete push", async () => {
+      client.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      await service.push("account-1", {
+        syncToken: null,
+        rows: [{ table: "food_log", op: "delete", row: { id: validUpsertRow.id, updatedAt: validUpsertRow.updatedAt } }],
+      });
+
+      expect(client.query).toHaveBeenCalledTimes(1); // only the soft-delete UPDATE, nothing else
     });
 
     it("rejects as stale when the server already has an equal-or-newer version owned by the same account", async () => {
@@ -407,6 +443,7 @@ describe("SyncService", () => {
             },
           ],
         })
+        .mockResolvedValueOnce({ rows: [] }) // app.food_nutrition overlay lookup for the food_log row above (no correction exists)
         .mockResolvedValueOnce({
           rows: [
             {

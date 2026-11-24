@@ -28,9 +28,11 @@ describe("FoodLogService", () => {
   });
 
   describe("create", () => {
-    it("inserts with the client-generated id and account id from the JWT", async () => {
+    it("inserts with the client-generated id and account id from the JWT, plus a computed snapshot", async () => {
       const row = { id: "log-1", account_id: "account-1" };
-      db.query.mockResolvedValue({ rows: [row] });
+      // First call is the app.food_nutrition overlay lookup computeNutritionSnapshot makes before
+      // the INSERT (no correction exists for L002, so it resolves empty); the second is the INSERT.
+      db.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [row] });
 
       const result = await service.create("account-1", {
         id: "log-1",
@@ -45,9 +47,44 @@ describe("FoodLogService", () => {
       });
 
       expect(result).toEqual(row);
-      expect(db.query).toHaveBeenCalledWith(
+      // food.getNutrientSummaries defaults to an empty Map in this suite's beforeEach, so L002
+      // resolves to no summary - macros null, confidence null, same as the pre-existing listByDate
+      // "leaves macros null when the food has no nutrient summary" case.
+      expect(db.query).toHaveBeenNthCalledWith(
+        2,
         expect.stringContaining("INSERT INTO app.food_log"),
-        ["log-1", "account-1", "indb", "L002", 150, "g", "lunch", "2026-11-14T12:00:00.000Z", "manual", false],
+        [
+          "log-1", "account-1", "indb", "L002", 150, "g", "lunch", "2026-11-14T12:00:00.000Z", "manual", false,
+          null, null, null, null, null, 0,
+        ],
+      );
+    });
+
+    it("stores 'verified' confidence and real macro values when the food resolves", async () => {
+      const row = { id: "log-2", account_id: "account-1" };
+      db.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [row] });
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["L002", { name: "Idli", kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
+        ]),
+      );
+
+      await service.create("account-1", {
+        id: "log-2",
+        foodSource: "indb",
+        foodRef: "L002",
+        quantity: 200,
+        unit: "g",
+        mealType: "lunch",
+        loggedAt: "2026-11-14T12:00:00.000Z",
+        source: "manual",
+        isEstimate: false,
+      });
+
+      expect(db.query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("INSERT INTO app.food_log"),
+        expect.arrayContaining([260, 5.4, 0.6, 56, "verified", 0]),
       );
     });
   });
@@ -178,6 +215,247 @@ describe("FoodLogService", () => {
         [["custom-food-1"]],
       );
     });
+
+    it("returns a row's stored snapshot as-is, never re-derived from the current (possibly corrected) data - docs/FOOD_DATABASE_AUDIT.md finding #10", async () => {
+      db.query.mockResolvedValue({
+        rows: [
+          {
+            id: "log-1",
+            account_id: "account-1",
+            food_source: "indb",
+            food_ref: "L002",
+            quantity: "200",
+            unit: "g",
+            meal_type: "lunch",
+            kcal_snapshot: "45.3",
+            protein_g_snapshot: "4.4",
+            fat_g_snapshot: "3.0",
+            carb_g_snapshot: "0.1",
+            nutrition_confidence: "verified",
+          },
+        ],
+      });
+      // If the live value were used instead of the snapshot, this would produce a completely
+      // different kcal - proving the snapshot really does win, not just coincidentally match.
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["L002", { name: "Boiled egg", kcalPer100g: 999, proteinGPer100g: 999, fatGPer100g: 999, carbGPer100g: 999, servingGramsByName: {} }],
+        ]),
+      );
+
+      const [entry] = await service.listByDate("account-1", "2026-11-14");
+
+      expect(entry.macros).toEqual({ kcal: 45.3, proteinG: 4.4, fatG: 3, carbG: 0.1 });
+      // food_name is still resolved fresh - it's a display label, not a nutrition value.
+      expect(entry.food_name).toBe("Boiled egg");
+    });
+
+    it("falls back to live computation when a row has no snapshot yet (not backfilled)", async () => {
+      db.query.mockResolvedValue({
+        rows: [
+          {
+            id: "log-1",
+            account_id: "account-1",
+            food_source: "indb",
+            food_ref: "L002",
+            quantity: "100",
+            unit: "g",
+            meal_type: "lunch",
+            kcal_snapshot: null,
+          },
+        ],
+      });
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["L002", { name: "Idli", kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
+        ]),
+      );
+
+      const [entry] = await service.listByDate("account-1", "2026-11-14");
+
+      expect(entry.macros).toEqual({ kcal: 130, proteinG: 2.7, fatG: 0.3, carbG: 28 });
+    });
+
+    it("prefers an app.food_nutrition overlay correction over the live indb/USDA value when computing fresh (no snapshot yet)", async () => {
+      db.query.mockResolvedValueOnce({
+        rows: [
+          {
+            id: "log-1",
+            account_id: "account-1",
+            food_source: "indb",
+            food_ref: "ASC056",
+            quantity: "100",
+            unit: "g",
+            meal_type: "breakfast",
+            kcal_snapshot: null,
+          },
+        ],
+      });
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["ASC056", { name: "Boiled egg", kcalPer100g: 45, proteinGPer100g: 4, fatGPer100g: 3, carbGPer100g: 0.1, servingGramsByName: {} }],
+        ]),
+      );
+      // The overlay lookup is the next db.query call after the food_log SELECT above.
+      db.query.mockResolvedValueOnce({
+        rows: [
+          {
+            food_code: "ASC056",
+            version: 1,
+            kcal_per_100g: "155",
+            protein_g_per_100g: "12.58",
+            fat_g_per_100g: "10.61",
+            carb_g_per_100g: "1.12",
+            confidence: "verified",
+          },
+        ],
+      });
+
+      const [entry] = await service.listByDate("account-1", "2026-11-14");
+
+      // 155 kcal/100g (the overlay's corrected value), not 45 (the live, uncorrected indb value).
+      expect(entry.macros).toEqual({ kcal: 155, proteinG: 12.6, fatG: 10.6, carbG: 1.1 });
+    });
+
+    it("resolves the overlay's own version number, not a hardcoded baseline, when a real correction exists", async () => {
+      // computeNutritionSnapshot (unlike listByDate) never does a food_log SELECT itself - the
+      // overlay lookup is the first (and only, for this single-indb-row case) db.query call.
+      db.query.mockResolvedValueOnce({
+        rows: [
+          {
+            food_code: "ASC056",
+            version: 1,
+            kcal_per_100g: "155",
+            protein_g_per_100g: "12.58",
+            fat_g_per_100g: "10.61",
+            carb_g_per_100g: "1.12",
+            confidence: "verified",
+          },
+        ],
+      });
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([["ASC056", { name: "Boiled egg", kcalPer100g: 45, proteinGPer100g: 4, fatGPer100g: 3, carbGPer100g: 0.1, servingGramsByName: {} }]]),
+      );
+
+      const { computeNutritionSnapshot } = await import("./food-log.service.js");
+      const snapshot = await computeNutritionSnapshot(
+        { food_source: "indb", food_ref: "ASC056", quantity: "100", unit: "g" },
+        food as unknown as Parameters<typeof computeNutritionSnapshot>[1],
+        db as unknown as Parameters<typeof computeNutritionSnapshot>[2],
+        packagedFood as unknown as Parameters<typeof computeNutritionSnapshot>[3],
+      );
+
+      expect(snapshot.version).toBe(1);
+    });
+
+    it("keeps a packaged food's own 'unverified' confidence when no app.food_nutrition correction exists for it", async () => {
+      db.query.mockResolvedValueOnce({ rows: [] }); // no overlay correction exists for this packaged food
+      packagedFood.getNutrientSummaries.mockResolvedValue(
+        new Map([["packaged-food-1", { name: "Cola", brand: "Acme", kcal: 500, proteinG: 0, fatG: 0, carbG: 60, confidence: "unverified" }]]),
+      );
+
+      const { computeNutritionSnapshot } = await import("./food-log.service.js");
+      const snapshot = await computeNutritionSnapshot(
+        { food_source: "packaged", food_ref: "packaged-food-1", quantity: "50", unit: "g" },
+        food as unknown as Parameters<typeof computeNutritionSnapshot>[1],
+        db as unknown as Parameters<typeof computeNutritionSnapshot>[2],
+        packagedFood as unknown as Parameters<typeof computeNutritionSnapshot>[3],
+      );
+
+      // The pre-fix bug returned a generic 'verified' default here instead of the packaged food's
+      // own (correctly weaker) confidence when no overlay exists.
+      expect(snapshot.confidence).toBe("unverified");
+      expect(snapshot.macros).toEqual({ kcal: 250, proteinG: 0, fatG: 0, carbG: 30 });
+    });
+
+    it("applies an app.food_nutrition overlay correction to a packaged food, overriding its base confidence", async () => {
+      db.query.mockResolvedValueOnce({
+        rows: [
+          {
+            food_code: "packaged-food-1",
+            version: 1,
+            kcal_per_100g: "400",
+            protein_g_per_100g: "5",
+            fat_g_per_100g: "2",
+            carb_g_per_100g: "50",
+            confidence: "verified",
+          },
+        ],
+      });
+      packagedFood.getNutrientSummaries.mockResolvedValue(
+        new Map([["packaged-food-1", { name: "Cola", brand: "Acme", kcal: 500, proteinG: 0, fatG: 0, carbG: 60, confidence: "unverified" }]]),
+      );
+
+      const { computeNutritionSnapshot } = await import("./food-log.service.js");
+      const snapshot = await computeNutritionSnapshot(
+        { food_source: "packaged", food_ref: "packaged-food-1", quantity: "50", unit: "g" },
+        food as unknown as Parameters<typeof computeNutritionSnapshot>[1],
+        db as unknown as Parameters<typeof computeNutritionSnapshot>[2],
+        packagedFood as unknown as Parameters<typeof computeNutritionSnapshot>[3],
+      );
+
+      expect(snapshot.macros).toEqual({ kcal: 200, proteinG: 2.5, fatG: 1, carbG: 25 });
+      expect(snapshot.confidence).toBe("verified");
+      expect(snapshot.version).toBe(1);
+    });
+
+    it("tags a custom food's snapshot 'estimated' (not 'calculated') when at least one ingredient's nutrients couldn't be resolved - finding #8", async () => {
+      // A real-shaped case: paneer bhurji with a resolvable ingredient (onion, L002 stand-in) and
+      // an unresolvable one (paneer, L003 - the real documented gap, FOOD_DATABASE_AUDIT.md #6).
+      // The macros are deliberately unchanged by this fix - paneer's weight (50g) still counts
+      // toward totalGrams exactly as before (finding #8 is about mislabeling, not re-deriving the
+      // number) - only the confidence tier now tells the truth about the gap.
+      db.query
+        .mockResolvedValueOnce({
+          rows: [
+            { custom_food_id: "custom-food-1", food_source: "indb", food_ref: "L002", quantity_g: "50" },
+            { custom_food_id: "custom-food-1", food_source: "indb", food_ref: "L003", quantity_g: "50" }, // Paneer: no nutrient data
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [{ id: "custom-food-1", name: "Paneer bhurji" }] });
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["L002", { name: "Onion", kcalPer100g: 40, proteinGPer100g: 1.1, fatGPer100g: 0.1, carbGPer100g: 9, servingGramsByName: {} }],
+          // L003 (Paneer) deliberately absent - exactly the real gap.
+        ]),
+      );
+
+      const { computeNutritionSnapshot } = await import("./food-log.service.js");
+      const snapshot = await computeNutritionSnapshot(
+        { food_source: "custom", food_ref: "custom-food-1", quantity: "100", unit: "g" },
+        food as unknown as Parameters<typeof computeNutritionSnapshot>[1],
+        db as unknown as Parameters<typeof computeNutritionSnapshot>[2],
+        packagedFood as unknown as Parameters<typeof computeNutritionSnapshot>[3],
+      );
+
+      // Non-null, real macros (L002's contribution scaled across the full 100g logged) - the fix
+      // doesn't zero anything out or change the arithmetic.
+      expect(snapshot.macros?.kcal).not.toBeNull();
+      expect(snapshot.confidence).toBe("estimated");
+    });
+
+    it("tags a fully-resolved custom food's snapshot 'calculated'", async () => {
+      db.query
+        .mockResolvedValueOnce({
+          rows: [{ custom_food_id: "custom-food-1", food_source: "indb", food_ref: "L002", quantity_g: "50" }],
+        })
+        .mockResolvedValueOnce({ rows: [{ id: "custom-food-1", name: "Overnight oats" }] });
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["L002", { name: "Idli", kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
+        ]),
+      );
+
+      const { computeNutritionSnapshot } = await import("./food-log.service.js");
+      const snapshot = await computeNutritionSnapshot(
+        { food_source: "custom", food_ref: "custom-food-1", quantity: "100", unit: "g" },
+        food as unknown as Parameters<typeof computeNutritionSnapshot>[1],
+        db as unknown as Parameters<typeof computeNutritionSnapshot>[2],
+        packagedFood as unknown as Parameters<typeof computeNutritionSnapshot>[3],
+      );
+
+      expect(snapshot.confidence).toBe("calculated");
+    });
   });
 
   describe("update and softDelete ownership checks", () => {
@@ -191,6 +469,36 @@ describe("FoodLogService", () => {
       db.query.mockResolvedValue({ rows: [{ id: "log-1", account_id: "someone-else" }] });
 
       await expect(service.softDelete("account-1", "log-1")).rejects.toThrow(ForbiddenException);
+    });
+
+    it("recomputes the nutrition snapshot when the user edits quantity - an ordinary edit, not a data correction", async () => {
+      const existing = {
+        id: "log-1",
+        account_id: "account-1",
+        food_source: "indb",
+        food_ref: "L002",
+        quantity: "100",
+        unit: "g",
+        meal_type: "lunch",
+        logged_at: "2026-11-14T12:00:00.000Z",
+      };
+      db.query
+        .mockResolvedValueOnce({ rows: [existing] }) // findOwned
+        .mockResolvedValueOnce({ rows: [] }) // app.food_nutrition overlay lookup (none exists)
+        .mockResolvedValueOnce({ rows: [{ ...existing, quantity: "200" }] }); // the UPDATE itself
+      food.getNutrientSummaries.mockResolvedValue(
+        new Map([
+          ["L002", { name: "Idli", kcalPer100g: 130, proteinGPer100g: 2.7, fatGPer100g: 0.3, carbGPer100g: 28, servingGramsByName: {} }],
+        ]),
+      );
+
+      await service.update("account-1", "log-1", { quantity: 200 });
+
+      expect(db.query).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining("UPDATE app.food_log"),
+        expect.arrayContaining([260, 5.4, 0.6, 56, "verified"]),
+      );
     });
   });
 });

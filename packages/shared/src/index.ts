@@ -11,3 +11,6 @@ export * from "./fasting.ts";
 export * from "./achievements.ts";
 export * from "./meal-plan.ts";
 export * from "./progress.ts";
+export * from "./food-category.ts";
+export * from "./nutrition-validation.ts";
+export * from "./recipe-calc.ts";

@@ -139,16 +139,36 @@ describe("PackagedFoodService", () => {
       expect(db.query).not.toHaveBeenCalled();
     });
 
-    it("maps rows keyed by id into the camelCase macro shape", async () => {
+    it("maps rows keyed by id into the camelCase macro shape, including confidence", async () => {
       db.query.mockResolvedValue({
         rows: [
-          { id: "pf-1", nutrients: { energy_kcal: 400, protein_g: 10, fat_g: 15, carb_g: 55, fibre_g: 2 } },
+          {
+            id: "pf-1",
+            nutrients: { energy_kcal: 400, protein_g: 10, fat_g: 15, carb_g: 55, fibre_g: 2 },
+            confidence: "unverified",
+          },
         ],
       });
 
       const result = await service.getNutrientSummaries(["pf-1"]);
 
-      expect(result.get("pf-1")).toEqual({ kcal: 400, proteinG: 10, fatG: 15, carbG: 55 });
+      expect(result.get("pf-1")).toEqual({
+        kcal: 400,
+        proteinG: 10,
+        fatG: 15,
+        carbG: 55,
+        confidence: "unverified",
+      });
+    });
+
+    it("defaults confidence to 'unverified' when a row is somehow missing the column", async () => {
+      db.query.mockResolvedValue({
+        rows: [{ id: "pf-1", nutrients: { energy_kcal: 400, protein_g: 10, fat_g: 15, carb_g: 55, fibre_g: 2 } }],
+      });
+
+      const result = await service.getNutrientSummaries(["pf-1"]);
+
+      expect(result.get("pf-1")?.confidence).toBe("unverified");
     });
   });
 });

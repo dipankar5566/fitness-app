@@ -20,7 +20,11 @@ export interface PackagedFoodDetail {
 /** Same MacroBreakdown shape FoodLogService exports, plus name/brand for enrichWithMacros's
  * food_name snapshot - duplicated rather than imported, since food-log.service.ts needs to
  * import PackagedFoodService (to enrich packaged-food log rows), and importing back from there
- * would create a cycle. */
+ * would create a cycle. `confidence` mirrors `app.packaged_food.confidence`
+ * (`0013_food_nutrition_overlay.sql`) - every row defaults `'unverified'` since it's Open Food
+ * Facts crowdsourced data (docs/FOOD_DATABASE_AUDIT.md finding #11), surfaced here so
+ * `enrichWithMacros` can carry it into a food_log row's `nutrition_confidence` snapshot instead
+ * of defaulting packaged-food logs to the wrong (stronger) tier. */
 export interface PackagedFoodMacroBreakdown {
   name: string;
   brand: string | null;
@@ -28,6 +32,7 @@ export interface PackagedFoodMacroBreakdown {
   proteinG: number | null;
   fatG: number | null;
   carbG: number | null;
+  confidence: "verified" | "calculated" | "estimated" | "unverified";
 }
 
 interface PackagedFoodRow {
@@ -93,10 +98,11 @@ export class PackagedFoodService {
     if (ids.length === 0) {
       return new Map();
     }
-    const result = await this.db.query<Pick<PackagedFoodRow, "id" | "name" | "brand" | "nutrients">>(
-      "SELECT id, name, brand, nutrients FROM app.packaged_food WHERE id = ANY($1)",
-      [ids],
-    );
+    const result = await this.db.query<
+      Pick<PackagedFoodRow, "id" | "name" | "brand" | "nutrients"> & {
+        confidence: PackagedFoodMacroBreakdown["confidence"] | null;
+      }
+    >("SELECT id, name, brand, nutrients, confidence FROM app.packaged_food WHERE id = ANY($1)", [ids]);
     return new Map(
       result.rows.map((row) => [
         row.id,
@@ -107,6 +113,9 @@ export class PackagedFoodService {
           proteinG: row.nutrients.protein_g,
           fatG: row.nutrients.fat_g,
           carbG: row.nutrients.carb_g,
+          // Defensive default for a row somehow missing the column (shouldn't happen post-migration,
+          // but matches this codebase's habit of never crashing on an unexpected null).
+          confidence: row.confidence ?? "unverified",
         },
       ]),
     );
